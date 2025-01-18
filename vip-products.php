@@ -10,8 +10,12 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Include the updater class
+require_once plugin_dir_path(__FILE__) . 'includes/class-vip-products-updater.php';
+
 class WC_VIP_Products {
     private static $instance = null;
+    private $updater = null;
 
     public static function init() {
         if (self::$instance === null) {
@@ -21,6 +25,9 @@ class WC_VIP_Products {
     }
 
     public function __construct() {
+        // Initialize the updater
+        $this->updater = new WC_VIP_Products_Updater();
+
         // Check if WooCommerce is active
         if (!class_exists('WooCommerce')) {
             add_action('admin_notices', array($this, 'woocommerce_missing_notice'));
