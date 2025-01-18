@@ -2,7 +2,7 @@
 /*
 Plugin Name: WooCommerce VIP Products
 Description: Allows for creation of VIP-exclusive products for specific users.
-Version: 1.1.7
+Version: 1.1.8
 Author: David Baldaro
 New Release
 */
@@ -68,6 +68,12 @@ class WC_VIP_Products {
         // Additional filters for Flatsome AJAX search
         add_filter('posts_where', array($this, 'filter_search_where'), 10, 2);
         add_filter('woocommerce_product_data_store_cpt_get_products_query', array($this, 'filter_products_query'), 10, 2);
+
+        // Filter admin products list
+        add_filter('parse_query', array($this, 'filter_admin_vip_products'));
+
+        // Add VIP filter button to products page
+        add_action('restrict_manage_posts', array($this, 'add_vip_filter_button'));
     }
 
     public function woocommerce_missing_notice() {
@@ -536,6 +542,61 @@ class WC_VIP_Products {
         }
 
         return $args;
+    }
+
+    /**
+     * Filter products in admin to show only VIP products
+     */
+    public function filter_admin_vip_products($query) {
+        global $pagenow, $typenow;
+        
+        // Only run on the products admin page
+        if (!is_admin() || $pagenow !== 'edit.php' || $typenow !== 'product') {
+            return $query;
+        }
+
+        // Check if we want to show VIP products
+        if (!isset($_GET['show_vip']) || $_GET['show_vip'] !== '1') {
+            return $query;
+        }
+
+        // Add meta query to show only VIP products
+        $meta_query = array(
+            array(
+                'key'     => '_product_visibility_type',
+                'value'   => 'vip',
+                'compare' => '='
+            )
+        );
+
+        // Merge with existing meta query if any
+        $existing_meta_query = $query->get('meta_query');
+        if (!empty($existing_meta_query)) {
+            $meta_query = array_merge($meta_query, $existing_meta_query);
+        }
+
+        $query->set('meta_query', $meta_query);
+        
+        return $query;
+    }
+
+    /**
+     * Add VIP filter button to products admin page
+     */
+    public function add_vip_filter_button() {
+        global $typenow;
+        
+        if ($typenow !== 'product') {
+            return;
+        }
+
+        $show_vip = isset($_GET['show_vip']) ? $_GET['show_vip'] : '0';
+        ?>
+        <select name="show_vip" id="dropdown_show_vip">
+            <option value="0" <?php selected($show_vip, '0'); ?>><?php _e('All Products', 'wc-vip-products'); ?></option>
+            <option value="1" <?php selected($show_vip, '1'); ?>><?php _e('VIP Products Only', 'wc-vip-products'); ?></option>
+        </select>
+        <?php
     }
 }
 
