@@ -5,8 +5,8 @@ if (!defined('ABSPATH')) {
 }
 
 class WC_VIP_Products_Updater {
-    private $github_repo = 'dbaldaro/WooCommerce-VIP-Products';
-    private $github_api_url = 'https://api.github.com/repos/dbaldaro/WooCommerce-VIP-Products/releases/latest';
+    private $github_repo = 'dbaldaro/vip-products';
+    private $github_api_url = 'https://api.github.com/repos/dbaldaro/vip-products/releases/latest';
     private $plugin_slug = 'vip-products';
     private $plugin_path;
     private $current_version;
