@@ -1,0 +1,207 @@
+.woocommerce-vip-products {
+    padding: 20px 0;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.woocommerce-vip-products h2 {
+    margin: 0 0 10px 0;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.vip-description {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.vip-products-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.vip-products-table th {
+    text-align: left;
+    padding: 12px;
+    border-bottom: 2px solid #e5e7eb;
+    color: #374151;
+}
+
+.vip-products-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: middle;
+}
+
+.vip-products-table tr:last-child td {
+    border-bottom: none;
+}
+
+.product-id {
+    color: #6b7280;
+    font-size: 14px;
+    width: 80px;
+}
+
+.product-name {
+    font-weight: 500;
+    color: #111;
+}
+
+.vip-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #f3f4f6;
+    border-radius: 9999px;
+    font-size: 12px;
+    color: #374151;
+    margin-left: 8px;
+}
+
+.product-price {
+    font-weight: 600;
+    color: #111;
+}
+
+.product-action {
+    text-align: right;
+    width: 100px;
+}
+
+.view-product {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #2271b1;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.view-product:hover {
+    background: #135e96;
+}
+
+/* Mobile Styles */
+@media screen and (max-width: 640px) {
+    .vip-products-table {
+        display: block;
+        overflow-x: auto;
+    }
+
+    .woocommerce-vip-products {
+        padding: 20px;
+    }
+}
+
+/* Sorting styles */
+.vip-products-table th.sortable {
+    cursor: pointer;
+    position: relative;
+    padding-right: 25px; /* Make room for sort indicator */
+}
+
+.vip-products-table th.sortable:hover {
+    background-color: #f9fafb;
+}
+
+/* Sort indicator arrow */
+.sort-indicator {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+}
+
+/* Default state - show both arrows in grey */
+.sort-indicator::before,
+.sort-indicator::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+}
+
+.sort-indicator::before {
+    top: 0;
+    border-bottom: 5px solid #d1d5db;
+}
+
+.sort-indicator::after {
+    bottom: 0;
+    border-top: 5px solid #d1d5db;
+}
+
+/* Active sort states */
+th.sortable.sorted.asc .sort-indicator::before {
+    border-bottom-color: #2271b1;
+}
+
+th.sortable.sorted.desc .sort-indicator::after {
+    border-top-color: #2271b1;
+}
+
+/* Hover state */
+th.sortable:hover .sort-indicator::before {
+    border-bottom-color: #2271b1;
+}
+
+th.sortable:hover .sort-indicator::after {
+    border-top-color: #2271b1;
+}
+
+/* Active column highlight */
+th.sortable.sorted {
+    background-color: #f0f7ff;
+}
+
+/* Add text label for current sort */
+th.sortable.sorted::after {
+    content: attr(data-sort-direction);
+    display: block;
+    font-size: 11px;
+    font-weight: normal;
+    color: #2271b1;
+    margin-top: 2px;
+}
+
+.sort-helper {
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 1em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sort-helper svg {
+    color: #2271b1;
+}
+
+.vip-products-table th.sortable a {
+    color: #2271b1;
+    text-decoration: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.vip-products-table th.sortable a:hover {
+    color: #135e96;
+}
+
+/* Add a note about sorting above the table */
+.vip-products-table::before {
+    content: "Click column headers to sort";
+    display: block;
+    margin-bottom: 10px;
+    color: #666;
+    font-size: 0.9em;
+} 
