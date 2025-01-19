@@ -94,7 +94,7 @@ $products = new WP_Query($args);
                     }
                     ?>
                     <tr>
-                        <td class="product-id"><?php echo esc_html($product->get_id()); ?></td>
+                        <td class="product-id"><a href="<?php echo esc_url(get_permalink($product->get_id())); ?>"><?php echo esc_html($product->get_id()); ?></a></td>
                         <td class="product-name">
                             <?php echo esc_html(get_the_title()); ?>
                             <span class="vip-badge">VIP</span>

@@ -52,6 +52,10 @@ class WC_VIP_Products {
         add_filter('woocommerce_account_menu_items', array($this, 'add_vip_products_tab_myaccount'));
         add_action('woocommerce_account_vip-products_endpoint', array($this, 'vip_products_content'));
 
+        // Add VIP product type filter
+        add_filter('product_type_selector', array($this, 'add_vip_product_type'));
+        add_filter('woocommerce_product_filters', array($this, 'add_vip_product_filter'));
+
         // Enqueue scripts and styles
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
 
@@ -597,6 +601,29 @@ class WC_VIP_Products {
             <option value="1" <?php selected($show_vip, '1'); ?>><?php _e('VIP Products Only', 'wc-vip-products'); ?></option>
         </select>
         <?php
+    }
+
+    /**
+     * Add VIP product type to the product type dropdown
+     */
+    public function add_vip_product_type($types) {
+        $types['vip'] = __('VIP Product', 'wc-vip-products');
+        return $types;
+    }
+
+    /**
+     * Add VIP product filter to the products list
+     */
+    public function add_vip_product_filter($output) {
+        global $wp_query;
+        
+        // Get current value
+        $current_product_type = isset($_GET['product_type']) ? sanitize_text_field($_GET['product_type']) : '';
+        
+        // Modify the output to include VIP filter
+        $output = str_replace('</select>', '<option value="vip"' . selected($current_product_type, 'vip', false) . '>' . __('VIP Products', 'wc-vip-products') . '</option></select>', $output);
+        
+        return $output;
     }
 }
 
