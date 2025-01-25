@@ -880,9 +880,8 @@ class WC_VIP_Products {
         
         // Copy all product meta data except price and VIP specific ones
         $exclude_meta = array(
-            '_vip_product', '_vip_user_ids', '_edit_lock', '_edit_last', 
-            '_thumbnail_id', '_product_image_gallery',
-            '_price', '_regular_price', '_sale_price' // Exclude price meta
+            '_vip_product', '_vip_user_ids', '_edit_lock', '_edit_last',
+            '_price', '_regular_price', '_sale_price' // Exclude price meta only
         );
         $meta_data = get_post_meta($base_product->get_id());
         foreach ($meta_data as $meta_key => $meta_values) {
@@ -892,7 +891,18 @@ class WC_VIP_Products {
                 }
             }
         }
-        
+
+        // Copy featured image and gallery
+        $thumbnail_id = get_post_thumbnail_id($base_product->get_id());
+        if ($thumbnail_id) {
+            set_post_thumbnail($new_product_id, $thumbnail_id);
+        }
+
+        $product_gallery = $base_product->get_gallery_image_ids();
+        if (!empty($product_gallery)) {
+            update_post_meta($new_product_id, '_product_image_gallery', implode(',', $product_gallery));
+        }
+
         // Set price from the original order line item
         $item_total = floatval($item->get_total()) + floatval($item->get_total_tax());
         $item_quantity = $item->get_quantity();
