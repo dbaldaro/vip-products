@@ -19,22 +19,41 @@ jQuery(document).ready(function($) {
             delay: 250,
             data: function(params) {
                 return {
-                    q: params.term,
+                    term: params.term, // search term
                     action: 'search_users',
                     nonce: vipProducts.nonce
                 };
             },
-            processResults: function(data) {
+            processResults: function(response) {
+                // Check if we have an error
+                if (!response.success) {
+                    console.error('Error searching users:', response.data);
+                    return { results: [] };
+                }
                 return {
-                    results: data
+                    results: response.data
                 };
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                console.error('AJAX error:', textStatus, errorThrown);
             },
             cache: true
         },
         minimumInputLength: 2,
-        placeholder: 'Search for users...',
+        placeholder: vipProducts.i18n.searching,
         allowClear: true,
-        width: '400px'
+        width: '400px',
+        language: {
+            errorLoading: function() {
+                return vipProducts.i18n.error_loading;
+            },
+            searching: function() {
+                return vipProducts.i18n.searching;
+            },
+            noResults: function() {
+                return vipProducts.i18n.no_results;
+            }
+        }
     });
 
     // Get references to the elements

@@ -80,8 +80,8 @@ $products = new WP_Query($args);
                     }
                     ?>
                     <tr>
-                        <td><?php echo esc_html($product->get_id()); ?></td>
-                        <td><?php echo esc_html($product->get_name()); ?><span class="vip-badge">VIP</span></td>
+                        <td><strong><a href="<?php echo esc_url($product->get_permalink()); ?>"><?php echo esc_html($product->get_id()); ?></a></strong></td>
+                        <td><?php echo esc_html($product->get_name()); ?></td>
                         <td><?php echo wp_kses_post($product->get_price_html()); ?></td>
                         <td>
                             <a href="<?php echo esc_url($product->get_permalink()); ?>" class="button view"><?php _e('View', 'wc-vip-products'); ?></a>

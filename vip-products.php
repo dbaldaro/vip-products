@@ -59,6 +59,9 @@ class WC_VIP_Products {
                 return;
             }
 
+            // Add AJAX handlers
+            add_action('wp_ajax_search_users', array($this, 'ajax_search_users'));
+
             // Add product tab
             add_filter('woocommerce_product_data_tabs', array($this, 'add_vip_products_tab'));
             
@@ -82,9 +85,6 @@ class WC_VIP_Products {
 
             // Enqueue scripts and styles
             add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
-
-            // Add AJAX handler for user search
-            add_action('wp_ajax_search_users', array($this, 'ajax_search_users'));
 
             // Add VIP product creation button and handler
             add_action('woocommerce_after_order_itemmeta', array($this, 'add_create_vip_button'), 10, 3);
@@ -165,7 +165,7 @@ class WC_VIP_Products {
         
         // Localize script with nonce and ajaxurl
         wp_localize_script('vip-products-admin', 'vipProducts', array(
-            'nonce' => wp_create_nonce('wp_rest'),
+            'nonce' => wp_create_nonce('vip_products_search'),
             'ajax_url' => admin_url('admin-ajax.php'),
             'i18n' => array(
                 'error_loading' => __('The results could not be loaded.', 'wc-vip-products'),
@@ -424,7 +424,7 @@ class WC_VIP_Products {
     }
 
     public function ajax_search_users() {
-        check_ajax_referer('wp_rest', 'nonce');
+        check_ajax_referer('vip_products_search', 'nonce');
         
         if (!current_user_can('manage_woocommerce')) {
             wp_send_json_error('Permission denied');
@@ -439,17 +439,23 @@ class WC_VIP_Products {
 
         $users = get_users(array(
             'search' => '*' . $search_term . '*',
-            'number' => 10
+            'search_columns' => array('user_login', 'user_email', 'display_name'),
+            'number' => 10,
+            'orderby' => 'display_name',
+            'order' => 'ASC'
         ));
 
         $results = array();
         foreach ($users as $user) {
             $results[] = array(
                 'id' => $user->ID,
-                'text' => sprintf('%s (%s)', $user->display_name, $user->user_email)
+                'text' => sprintf('%s (%s)', 
+                    $user->display_name ?: $user->user_login,
+                    $user->user_email
+                )
             );
         }
-
+        
         wp_send_json_success($results);
     }
 
