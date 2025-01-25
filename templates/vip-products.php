@@ -24,13 +24,13 @@ $args = array(
     'meta_query' => array(
         'relation' => 'AND',
         array(
-            'key' => '_product_visibility_type',
-            'value' => 'vip',
+            'key' => '_vip_product',
+            'value' => 'yes',
             'compare' => '='
         ),
         array(
-            'key' => '_vip_users',
-            'value' => sprintf(':%s;', $current_user_id),
+            'key' => '_vip_user_ids',
+            'value' => $current_user_id,
             'compare' => 'LIKE'
         )
     )

@@ -2,7 +2,7 @@
 /*
 Plugin Name: WooCommerce VIP Products
 Description: Allows for creation of VIP-exclusive products for specific users.
-Version: 1.1.9
+Version: 1.1.10
 Author: David Baldaro
 New Release
 */
@@ -78,6 +78,12 @@ class WC_VIP_Products {
 
         // Add VIP filter button to products page
         add_action('restrict_manage_posts', array($this, 'add_vip_filter_button'));
+
+        // Add VIP product creation button to order items
+        add_action('woocommerce_after_order_itemmeta', array($this, 'add_create_vip_button'), 10, 3);
+        
+        // Add AJAX handler for VIP product creation
+        add_action('wp_ajax_create_vip_from_order_item', array($this, 'create_vip_from_order_item'));
     }
 
     public function woocommerce_missing_notice() {
@@ -89,30 +95,39 @@ class WC_VIP_Products {
     }
 
     public function enqueue_admin_scripts($hook) {
-        global $post_type;
-        
-        // Only load on product edit screens
-        if ('post.php' !== $hook && 'post-new.php' !== $hook && 'product' !== $post_type) {
+        // Only load on product edit pages
+        global $post;
+        if (!in_array($hook, array('post.php', 'post-new.php')) || 
+            (isset($post) && get_post_type($post) !== 'product')) {
             return;
         }
 
+        // Enqueue Select2
         wp_enqueue_style('select2');
         wp_enqueue_script('select2');
         
-        // Add our custom JavaScript
-        wp_enqueue_script(
-            'vip-products-admin',
-            plugins_url('assets/js/admin.js', __FILE__),
+        // Enqueue our custom scripts
+        wp_enqueue_script('vip-products-admin', 
+            plugin_dir_url(__FILE__) . 'assets/js/admin.js',
             array('jquery', 'select2'),
             '1.0.0',
             true
         );
-
-        // Add localized data for AJAX
-        wp_localize_script('vip-products-admin', 'vipProducts', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('search_users_nonce')
+        
+        // Localize script with nonce and ajaxurl
+        wp_localize_script('vip-products-admin', 'vipProductsAdmin', array(
+            'nonce' => wp_create_nonce('wp_rest'),
+            'ajaxurl' => admin_url('admin-ajax.php'),
+            'i18n' => array(
+                'error_loading' => __('The results could not be loaded.', 'vip-products'),
+                'searching' => __('Searching...', 'vip-products'),
+                'no_results' => __('No results found', 'vip-products')
+            )
         ));
+        
+        wp_enqueue_style('vip-products-admin', 
+            plugin_dir_url(__FILE__) . 'assets/css/vip-products.css'
+        );
     }
 
     public function add_vip_products_tab($tabs) {
@@ -127,116 +142,113 @@ class WC_VIP_Products {
 
     public function add_vip_products_fields() {
         global $post;
-
+        
+        // Get current VIP users
+        $vip_user_ids = get_post_meta($post->ID, '_vip_user_ids', true);
+        $vip_user_ids = !empty($vip_user_ids) ? (array)$vip_user_ids : array();
+        
         echo '<div id="vip_products_options" class="panel woocommerce_options_panel">';
         
+        // VIP Status field
         woocommerce_wp_select(array(
-            'id'      => '_product_visibility_type',
-            'label'   => __('VIP Status', 'wc-vip-products'),
+            'id' => '_vip_product',
+            'label' => __('VIP Status', 'vip-products'),
+            'description' => __('Is this a VIP-only product?', 'vip-products'),
+            'desc_tip' => true,
             'options' => array(
-                'public' => __('Public (Everyone)', 'wc-vip-products'),
-                'vip'    => __('VIP Members Only', 'wc-vip-products')
+                'no' => __('No', 'vip-products'),
+                'yes' => __('VIP Members Only', 'vip-products')
             )
         ));
         
-        echo '<p class="form-field vip_users_field">';
-        echo '<label for="vip_users">' . __('Select VIP Users', 'wc-vip-products') . '</label>';
-        echo '<select class="wc-customer-search" name="vip_users[]" multiple="multiple" data-placeholder="' . 
-             esc_attr__('Search for users...', 'wc-vip-products') . '">';
+        // VIP Users field
+        echo '<div class="form-field vip-users-field">';
+        echo '<label for="_vip_user_ids">' . __('Select VIP Users', 'vip-products') . '</label>';
+        echo '<select id="_vip_user_ids" name="_vip_user_ids[]" class="wc-customer-search" multiple="multiple" data-placeholder="' . esc_attr__('Search for users...', 'vip-products') . '" style="width: 100%;">';
         
-        $vip_users = get_post_meta($post->ID, '_vip_users', true);
-        if (!empty($vip_users)) {
-            foreach ($vip_users as $user_id) {
+        // Add existing users to the select
+        if (!empty($vip_user_ids)) {
+            foreach ($vip_user_ids as $user_id) {
                 $user = get_user_by('id', $user_id);
                 if ($user) {
-                    echo '<option value="' . esc_attr($user_id) . '" selected="selected">' . 
-                         esc_html($user->display_name) . ' (#' . $user_id . ')</option>';
+                    echo '<option value="' . esc_attr($user->ID) . '" selected>' . 
+                         esc_html(sprintf('%s (%s)', $user->display_name ?: $user->user_login, $user->user_email)) . 
+                         '</option>';
                 }
             }
         }
-        
         echo '</select>';
-        echo '</p>';
+        echo '<span class="description">' . __('Search and select users who can access this VIP product. You can select multiple users.', 'vip-products') . '</span>';
+        echo '</div>';
         echo '</div>';
     }
 
     public function save_vip_products_fields($post_id) {
-        // Save visibility type
-        $visibility_type = isset($_POST['_product_visibility_type']) ? $_POST['_product_visibility_type'] : 'public';
-        $visibility_type = sanitize_text_field($visibility_type);
+        // Save VIP status
+        $vip_status = isset($_POST['_vip_product']) ? sanitize_text_field($_POST['_vip_product']) : 'no';
+        update_post_meta($post_id, '_vip_product', $vip_status);
         
         // Save VIP users
-        $vip_users = isset($_POST['vip_users']) ? array_map('absint', $_POST['vip_users']) : array();
-        
-        // If it's a VIP product but no users are selected, keep it private
-        if ($visibility_type === 'vip' && empty($vip_users)) {
-            $visibility_type = 'private';
-        }
-        
-        update_post_meta($post_id, '_product_visibility_type', $visibility_type);
-        update_post_meta($post_id, '_vip_users', $vip_users);
+        $vip_user_ids = isset($_POST['_vip_user_ids']) ? (array)$_POST['_vip_user_ids'] : array();
+        $vip_user_ids = array_map('absint', $vip_user_ids);
+        $vip_user_ids = array_filter($vip_user_ids);
+        update_post_meta($post_id, '_vip_user_ids', $vip_user_ids);
 
-        // Handle VIP category assignment
-        if ($visibility_type === 'vip') {
+        if ($vip_status === 'yes') {
             // Assign VIP category (538)
             $vip_cat_id = 538;
+            wp_set_object_terms($post_id, array($vip_cat_id), 'product_cat', true);
             
-            // Get current categories
-            $current_categories = wp_get_post_terms($post_id, 'product_cat', array('fields' => 'ids'));
-            
-            // Add VIP category if not already assigned
-            if (!in_array($vip_cat_id, $current_categories)) {
-                // Set VIP category as primary by making it first in the array
-                array_unshift($current_categories, $vip_cat_id);
-                
-                // Remove any duplicate entries
-                $current_categories = array_unique($current_categories);
-                
-                // Update the product categories
-                wp_set_object_terms($post_id, $current_categories, 'product_cat');
-                
-                // Set primary category using Yoast's primary term (if Yoast SEO is active)
-                if (function_exists('wpseo_set_primary_term')) {
-                    wpseo_set_primary_term('product_cat', $vip_cat_id, $post_id);
-                }
-            }
+            // Clean up legacy meta fields if they exist
+            delete_post_meta($post_id, '_product_visibility_type');
+            delete_post_meta($post_id, '_vip_users');
+        } else {
+            // If not VIP, ensure all VIP-related meta is removed
+            delete_post_meta($post_id, '_product_visibility_type');
+            delete_post_meta($post_id, '_vip_users');
+            wp_remove_object_terms($post_id, array(538), 'product_cat');
         }
     }
 
     public function filter_vip_products($query) {
+        // Don't modify admin queries
         if (is_admin()) {
-            return $query;
+            return;
         }
 
+        // Get current user ID
         $current_user_id = get_current_user_id();
-        
-        // Start with a simple meta query
-        $meta_query = array('relation' => 'OR');
-        
-        // Always include public products and products with no visibility setting
-        $meta_query[] = array(
-            'key'     => '_product_visibility_type',
-            'value'   => 'public',
-            'compare' => '='
-        );
-        
-        $meta_query[] = array(
-            'key'     => '_product_visibility_type',
-            'compare' => 'NOT EXISTS'
-        );
 
-        // For logged-in users, add their VIP products
-        if ($current_user_id > 0) {
-            $meta_query[] = array(
-                'key'     => '_vip_users',
-                'value'   => sprintf(':%d;', $current_user_id),
-                'compare' => 'LIKE'
-            );
+        // Get existing meta query
+        $meta_query = $query->get('meta_query');
+        if (!is_array($meta_query)) {
+            $meta_query = array();
         }
 
-        // Set the meta query
+        // Add VIP product filtering
+        $meta_query[] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => '_vip_product',
+                'value'   => 'yes',
+                'compare' => '!='
+            ),
+            array(
+                'relation' => 'AND',
+                array(
+                    'key'     => '_vip_product',
+                    'value'   => 'yes',
+                    'compare' => '='
+                ),
+                array(
+                    'key'     => '_vip_user_ids',
+                    'value'   => $current_user_id,
+                    'compare' => 'LIKE'
+                )
+            )
+        );
+
         $query->set('meta_query', $meta_query);
-        
         return $query;
     }
 
@@ -263,14 +275,14 @@ class WC_VIP_Products {
             'meta_query'     => array(
                 'relation' => 'AND',
                 array(
-                    'key'     => '_product_visibility_type',
-                    'value'   => 'vip',
+                    'key'     => '_vip_product',
+                    'value'   => 'yes',
                     'compare' => '='
                 ),
                 array(
-                    'key'     => '_vip_users',
-                    'value'   => sprintf(':%s;', $current_user_id),
-                    'compare' => 'LIKE'
+                    'key'     => '_vip_user_ids',
+                    'value'   => $current_user_id,
+                    'compare' => 'IN'
                 )
             )
         );
@@ -286,36 +298,50 @@ class WC_VIP_Products {
     }
 
     public function ajax_search_users() {
-        check_ajax_referer('search_users_nonce', 'nonce');
+        // Verify nonce
+        check_ajax_referer('wp_rest', 'nonce');
 
-        if (!current_user_can('edit_products')) {
-            wp_die(-1);
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error('Permission denied');
+            return;
         }
 
-        $search_term = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
+        $term = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
         
-        if (empty($search_term)) {
-            wp_die();
+        if (empty($term)) {
+            wp_send_json_error('Search term is required');
+            return;
         }
+
+        // Debug log
+        error_log('Searching users with term: ' . $term);
 
         $users = get_users(array(
-            'search'         => "*{$search_term}*",
-            'search_columns' => array('user_login', 'user_email', 'user_nicename', 'display_name'),
-            'number'         => 10
+            'search' => '*' . esc_attr($term) . '*',
+            'search_columns' => array('user_login', 'user_email', 'display_name'),
+            'fields' => array('ID', 'user_login', 'user_email', 'display_name'),
+            'number' => 10,
+            'orderby' => 'display_name',
+            'order' => 'ASC'
         ));
 
+        // Debug log
+        error_log('Found ' . count($users) . ' users');
+
         $results = array();
-        
         foreach ($users as $user) {
             $results[] = array(
-                'id'   => $user->ID,
+                'id' => $user->ID,
                 'text' => sprintf(
                     '%s (%s)',
-                    $user->display_name,
+                    $user->display_name ?: $user->user_login,
                     $user->user_email
                 )
             );
         }
+
+        // Debug log
+        error_log('Returning results: ' . wp_json_encode($results));
 
         wp_send_json($results);
     }
@@ -325,17 +351,13 @@ class WC_VIP_Products {
         
         if (!$product) return;
         
-        $visibility_type = get_post_meta($product->get_id(), '_product_visibility_type', true);
+        $visibility_type = get_post_meta($product->get_id(), '_vip_product', true);
         
-        if ($visibility_type === 'vip') {
+        if ($visibility_type === 'yes') {
             $current_user_id = get_current_user_id();
-            $vip_users = get_post_meta($product->get_id(), '_vip_users', true);
+            $vip_user_ids = get_post_meta($product->get_id(), '_vip_user_ids', true);
             
-            if (!is_array($vip_users)) {
-                $vip_users = array();
-            }
-            
-            if (!in_array($current_user_id, $vip_users)) {
+            if ($current_user_id !== 0 && !in_array($current_user_id, (array)$vip_user_ids)) {
                 wc_print_notice(
                     __('This is a VIP-exclusive product. Please contact us for access.', 'wc-vip-products'),
                     'notice'
@@ -349,29 +371,45 @@ class WC_VIP_Products {
         }
     }
 
-    public function protect_vip_products() {
-        // Only check on single product pages
-        if (!is_product()) {
-            return;
+    private function user_has_vip_access($product_id, $user_id) {
+        // Get VIP status
+        $vip_status = get_post_meta($product_id, '_vip_product', true);
+        if ($vip_status !== 'yes') {
+            return false;
         }
 
+        // Get VIP user IDs
+        $vip_user_ids = get_post_meta($product_id, '_vip_user_ids', true);
+        if (empty($vip_user_ids)) {
+            return false;
+        }
+
+        // Check if user is in the allowed list
+        return in_array($user_id, (array)$vip_user_ids);
+    }
+
+    public function protect_vip_products() {
         global $post;
+        
+        if (!$post || $post->post_type !== 'product') {
+            return;
+        }
+        
         $product_id = $post->ID;
-        $visibility_type = get_post_meta($product_id, '_product_visibility_type', true);
+        $visibility_type = get_post_meta($product_id, '_vip_product', true);
 
         // If it's a VIP product
-        if ($visibility_type === 'vip') {
+        if ($visibility_type === 'yes') {
             $current_user_id = get_current_user_id();
             
             // If user is not logged in, redirect
-            if ($current_user_id === 0) {
-                wp_safe_redirect(wc_get_page_permalink('shop'));
+            if (!$current_user_id) {
+                wp_safe_redirect(wc_get_page_permalink('myaccount'));
                 exit;
             }
 
             // Check if user has access
-            $vip_users = get_post_meta($product_id, '_vip_users', true);
-            if (!is_array($vip_users) || !in_array($current_user_id, $vip_users)) {
+            if (!$this->user_has_vip_access($product_id, $current_user_id)) {
                 wp_safe_redirect(wc_get_page_permalink('shop'));
                 exit;
             }
@@ -396,12 +434,12 @@ class WC_VIP_Products {
             $meta_query[] = array(
                 'relation' => 'OR',
                 array(
-                    'key'     => '_product_visibility_type',
-                    'value'   => 'public',
+                    'key'     => '_vip_product',
+                    'value'   => 'no',
                     'compare' => '='
                 ),
                 array(
-                    'key'     => '_product_visibility_type',
+                    'key'     => '_vip_product',
                     'compare' => 'NOT EXISTS'
                 )
             );
@@ -410,27 +448,27 @@ class WC_VIP_Products {
                 'relation' => 'OR',
                 // Show all public products
                 array(
-                    'key'     => '_product_visibility_type',
-                    'value'   => 'public',
+                    'key'     => '_vip_product',
+                    'value'   => 'no',
                     'compare' => '='
                 ),
                 // Show products where visibility type doesn't exist (regular products)
                 array(
-                    'key'     => '_product_visibility_type',
+                    'key'     => '_vip_product',
                     'compare' => 'NOT EXISTS'
                 ),
                 // Show VIP products assigned to this user
                 array(
                     'relation' => 'AND',
                     array(
-                        'key'     => '_product_visibility_type',
-                        'value'   => 'vip',
+                        'key'     => '_vip_product',
+                        'value'   => 'yes',
                         'compare' => '='
                     ),
                     array(
-                        'key'     => '_vip_users',
-                        'value'   => sprintf(':%s;', $current_user_id),
-                        'compare' => 'LIKE'
+                        'key'     => '_vip_user_ids',
+                        'value'   => $current_user_id,
+                        'compare' => 'IN'
                     )
                 )
             );
@@ -452,9 +490,9 @@ class WC_VIP_Products {
         }
         
         $meta_query[] = array(
-            'key'     => '_product_visibility_type',
-            'value'   => 'vip',
-            'compare' => '!='
+            'key'     => '_vip_product',
+            'value'   => 'yes',
+            'compare' => '='
         );
         
         $query->set('meta_query', $meta_query);
@@ -474,8 +512,8 @@ class WC_VIP_Products {
 
         $where .= " AND {$wpdb->posts}.ID NOT IN (
             SELECT post_id FROM {$wpdb->postmeta} 
-            WHERE meta_key = '_product_visibility_type' 
-            AND meta_value = 'vip'
+            WHERE meta_key = '_vip_product' 
+            AND meta_value = 'yes'
         )";
 
         return $where;
@@ -492,12 +530,12 @@ class WC_VIP_Products {
         $query['meta_query'][] = array(
             'relation' => 'OR',
             array(
-                'key'     => '_product_visibility_type',
-                'value'   => 'vip',
+                'key'     => '_vip_product',
+                'value'   => 'yes',
                 'compare' => '!='
             ),
             array(
-                'key'     => '_product_visibility_type',
+                'key'     => '_vip_product',
                 'compare' => 'NOT EXISTS'
             )
         );
@@ -519,12 +557,12 @@ class WC_VIP_Products {
         $args['meta_query'][] = array(
             'relation' => 'OR',
             array(
-                'key'     => '_product_visibility_type',
-                'value'   => 'vip',
+                'key'     => '_vip_product',
+                'value'   => 'yes',
                 'compare' => '!='
             ),
             array(
-                'key'     => '_product_visibility_type',
+                'key'     => '_vip_product',
                 'compare' => 'NOT EXISTS'
             )
         );
@@ -537,8 +575,8 @@ class WC_VIP_Products {
         // Get all VIP product IDs
         $vip_products = $wpdb->get_col(
             "SELECT post_id FROM {$wpdb->postmeta} 
-            WHERE meta_key = '_product_visibility_type' 
-            AND meta_value = 'vip'"
+            WHERE meta_key = '_vip_product' 
+            AND meta_value = 'yes'"
         );
 
         if (!empty($vip_products)) {
@@ -567,8 +605,8 @@ class WC_VIP_Products {
         // Add meta query to show only VIP products
         $meta_query = array(
             array(
-                'key'     => '_product_visibility_type',
-                'value'   => 'vip',
+                'key'     => '_vip_product',
+                'value'   => 'yes',
                 'compare' => '='
             )
         );
@@ -624,6 +662,115 @@ class WC_VIP_Products {
         $output = str_replace('</select>', '<option value="vip"' . selected($current_product_type, 'vip', false) . '>' . __('VIP Products', 'wc-vip-products') . '</option></select>', $output);
         
         return $output;
+    }
+
+    /**
+     * Add Create VIP Product button to order items in admin
+     */
+    public function add_create_vip_button($item_id, $item, $product) {
+        // Get the order ID and order object
+        $order_id = $item->get_order_id();
+        $order = wc_get_order($order_id);
+        
+        if (!$order || !$product) {
+            return;
+        }
+        
+        // Check if the order has a registered user
+        $user_id = $order->get_user_id();
+        if (!$user_id) {
+            return;
+        }
+        
+        // Add the create VIP button
+        ?>
+        <div class="create-vip-product-wrapper">
+            <button type="button" 
+                    class="button create-vip-product" 
+                    data-order-id="<?php echo esc_attr($order_id); ?>"
+                    data-item-id="<?php echo esc_attr($item_id); ?>"
+                    data-product-id="<?php echo esc_attr($product->get_id()); ?>"
+                    data-user-id="<?php echo esc_attr($user_id); ?>">
+                Create VIP Product
+            </button>
+        </div>
+        <?php
+        
+        // Add necessary JavaScript
+        wp_enqueue_script('vip-products-admin');
+    }
+    
+    /**
+     * Handle AJAX request to create VIP product from order item
+     */
+    public function create_vip_from_order_item() {
+        check_ajax_referer('wp_rest', 'nonce');
+        
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error('Permission denied');
+            return;
+        }
+        
+        $order_id = isset($_POST['order_id']) ? intval($_POST['order_id']) : 0;
+        $item_id = isset($_POST['item_id']) ? intval($_POST['item_id']) : 0;
+        $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+        
+        if (!$order_id || !$item_id || !$user_id) {
+            wp_send_json_error('Missing required data');
+            return;
+        }
+
+        $order = wc_get_order($order_id);
+        $item = $order->get_item($item_id);
+        
+        if (!$order || !$item) {
+            wp_send_json_error('Invalid order or item');
+            return;
+        }
+        
+        // Get the base product to duplicate
+        $base_product = wc_get_product(9504);
+        if (!$base_product) {
+            wp_send_json_error('Base VIP product not found');
+            return;
+        }
+        
+        // Get customer info
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            wp_send_json_error('User not found');
+            return;
+        }
+        
+        // Create new product as a duplicate
+        $new_product = new WC_Product_Simple();
+        
+        // Set the product data
+        $new_product->set_name(sprintf('%s_%s', $user->user_login, $item->get_name()));
+        $new_product->set_status('publish');
+        $new_product->set_catalog_visibility('hidden');
+        $new_product->set_description($base_product->get_description());
+        $new_product->set_short_description($item->get_meta_data() ? wp_json_encode($item->get_meta_data()) : '');
+        $new_product->set_price($base_product->get_price());
+        $new_product->set_regular_price($base_product->get_regular_price());
+        
+        // Set as VIP product
+        $new_product->update_meta_data('_vip_product', 'yes');
+        $new_product->update_meta_data('_vip_user_ids', array($user_id));
+        
+        // Save the product
+        $new_product_id = $new_product->save();
+        
+        if (!$new_product_id) {
+            wp_send_json_error('Failed to create VIP product');
+            return;
+        }
+        
+        // Return success with edit URL
+        wp_send_json_success(array(
+            'message' => 'VIP product created successfully',
+            'redirect' => get_edit_post_link($new_product_id, 'url')
+        ));
     }
 }
 
