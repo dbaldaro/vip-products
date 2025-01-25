@@ -61,6 +61,10 @@ class WC_VIP_Products {
 
             // Add AJAX handlers
             add_action('wp_ajax_search_users', array($this, 'ajax_search_users'));
+            add_action('wp_ajax_create_vip_from_order_item', array($this, 'create_vip_from_order_item'));
+
+            // Enqueue admin scripts
+            add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
 
             // Add product tab
             add_filter('woocommerce_product_data_tabs', array($this, 'add_vip_products_tab'));
@@ -83,12 +87,8 @@ class WC_VIP_Products {
             add_filter('product_type_selector', array($this, 'add_vip_product_type'));
             add_filter('woocommerce_product_filters', array($this, 'add_vip_product_filter'));
 
-            // Enqueue scripts and styles
-            add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
-
             // Add VIP product creation button and handler
             add_action('woocommerce_after_order_itemmeta', array($this, 'add_create_vip_button'), 10, 3);
-            add_action('wp_ajax_create_vip_from_order_item', array($this, 'create_vip_from_order_item'));
 
             // Exclude VIP products from search results
             add_filter('pre_get_posts', array($this, 'exclude_vip_products_from_search'));
@@ -129,24 +129,12 @@ class WC_VIP_Products {
     }
 
     public function enqueue_admin_scripts($hook) {
-        // Always load on WooCommerce order pages
-        $is_order_page = (
-            $hook === 'woocommerce_page_wc-orders' || // New WooCommerce order page
-            $hook === 'post.php' && isset($_GET['post']) && get_post_type($_GET['post']) === 'shop_order' || // Legacy order page
-            isset($_GET['page']) && $_GET['page'] === 'wc-orders' // Another way to check for order page
-        );
-        
-        // Also load on product edit pages
-        $is_product_page = (
-            in_array($hook, array('post.php', 'post-new.php')) && 
-            isset($_GET['post']) && 
-            get_post_type($_GET['post']) === 'product'
-        );
-        
-        if (!$is_order_page && !$is_product_page) {
+        // Only load on order edit page
+        global $post_type;
+        if ($hook !== 'post.php' && $hook !== 'post-new.php' && $hook !== 'woocommerce_page_wc-orders') {
             return;
         }
-
+        
         // Enqueue Select2
         wp_enqueue_style('select2');
         wp_enqueue_script('select2');
@@ -165,12 +153,20 @@ class WC_VIP_Products {
         
         // Localize script with nonce and ajaxurl
         wp_localize_script('vip-products-admin', 'vipProducts', array(
-            'nonce' => wp_create_nonce('vip_products_search'),
+            'create_nonce' => wp_create_nonce('vip_products_create'),
+            'search_nonce' => wp_create_nonce('vip_products_search'),
             'ajax_url' => admin_url('admin-ajax.php'),
             'i18n' => array(
                 'error_loading' => __('The results could not be loaded.', 'wc-vip-products'),
                 'searching' => __('Searching...', 'wc-vip-products'),
-                'no_results' => __('No results found', 'wc-vip-products')
+                'no_results' => __('No results found', 'wc-vip-products'),
+                'create_error' => __('Error: Missing required data for VIP product creation', 'wc-vip-products'),
+                'config_error' => __('Error: VIP Products configuration is missing', 'wc-vip-products'),
+                'success' => __('VIP product created successfully!', 'wc-vip-products'),
+                'unknown_error' => __('Unknown error', 'wc-vip-products'),
+                'ajax_error' => __('Failed to create VIP product. Please try again.', 'wc-vip-products'),
+                'creating' => __('Creating...', 'wc-vip-products'),
+                'create_button' => __('Create VIP Product', 'wc-vip-products')
             )
         ));
         
@@ -424,7 +420,7 @@ class WC_VIP_Products {
     }
 
     public function ajax_search_users() {
-        check_ajax_referer('vip_products_search', 'nonce');
+        check_ajax_referer('vip_products_search', 'search_nonce');
         
         if (!current_user_can('manage_woocommerce')) {
             wp_send_json_error('Permission denied');
@@ -514,7 +510,7 @@ class WC_VIP_Products {
 
     public function filter_search_results($query) {
         // Only filter front-end searches
-        if (is_admin() || !$query->is_search() || !$query->is_main_query()) {
+        if (!$query->is_search() || !$query->is_main_query() || is_admin()) {
             return $query;
         }
 
@@ -783,30 +779,90 @@ class WC_VIP_Products {
             </button>
         </div>
         <?php
-        
-        // Ensure scripts are loaded in the footer
-        add_action('admin_footer', function() {
-            wp_enqueue_script('jquery');
-            wp_enqueue_script(
-                'vip-products-admin',
-                plugin_dir_url(__FILE__) . 'assets/js/admin.js',
-                array('jquery'),
-                filemtime(plugin_dir_path(__FILE__) . 'assets/js/admin.js'),
-                true
-            );
-            
-            wp_localize_script('vip-products-admin', 'vipProducts', array(
-                'nonce' => wp_create_nonce('wp_rest'),
-                'ajax_url' => admin_url('admin-ajax.php')
-            ));
-        });
     }
     
+    /**
+     * Exclude VIP products from search results unless user has access
+     *
+     * @param WP_Query $query The WordPress query object
+     * @return WP_Query
+     */
+    public function exclude_vip_products_from_search($query) {
+        // Only modify search queries
+        if (!$query->is_search() || !$query->is_main_query() || is_admin()) {
+            return $query;
+        }
+
+        // Get current user ID
+        $current_user_id = get_current_user_id();
+
+        // If user is not logged in, exclude all VIP products
+        if ($current_user_id === 0) {
+            $meta_query = array(
+                'relation' => 'OR',
+                array(
+                    'key'     => '_vip_product',
+                    'value'   => 'yes',
+                    'compare' => '!='
+                ),
+                array(
+                    'key'     => '_vip_product',
+                    'compare' => 'NOT EXISTS'
+                )
+            );
+        } else {
+            // For logged in users, show only their VIP products plus regular products
+            $meta_query = array(
+                'relation' => 'OR',
+                // Regular products
+                array(
+                    'relation' => 'OR',
+                    array(
+                        'key'     => '_vip_product',
+                        'value'   => 'yes',
+                        'compare' => '!='
+                    ),
+                    array(
+                        'key'     => '_vip_product',
+                        'compare' => 'NOT EXISTS'
+                    )
+                ),
+                // User's VIP products
+                array(
+                    'relation' => 'AND',
+                    array(
+                        'key'     => '_vip_product',
+                        'value'   => 'yes',
+                        'compare' => '='
+                    ),
+                    array(
+                        'key'     => '_vip_user_ids',
+                        'value'   => sprintf(':%d;', $current_user_id),
+                        'compare' => 'LIKE'
+                    )
+                )
+            );
+        }
+
+        // Add our meta query
+        $existing_meta_query = $query->get('meta_query');
+        if (!empty($existing_meta_query)) {
+            $meta_query = array(
+                'relation' => 'AND',
+                $existing_meta_query,
+                $meta_query
+            );
+        }
+        $query->set('meta_query', $meta_query);
+
+        return $query;
+    }
+
     /**
      * Handle AJAX request to create VIP product from order item
      */
     public function create_vip_from_order_item() {
-        check_ajax_referer('wp_rest', 'nonce');
+        check_ajax_referer('vip_products_create', 'create_nonce');
         
         if (!current_user_can('manage_woocommerce')) {
             wp_send_json_error('Permission denied');
@@ -832,7 +888,7 @@ class WC_VIP_Products {
         }
         
         // Get the base product to duplicate
-        $base_product = wc_get_product(9504);
+        $base_product = wc_get_product(73363);
         if (!$base_product) {
             wp_send_json_error('Base VIP product not found');
             return;
@@ -854,6 +910,18 @@ class WC_VIP_Products {
         $new_product->set_catalog_visibility('hidden');
         $new_product->set_description($base_product->get_description());
         
+        // Set the product image
+        $image_id = get_post_thumbnail_id($base_product->get_id());
+        if ($image_id) {
+            $new_product->set_image_id($image_id);
+        }
+
+        // Set gallery images
+        $gallery_image_ids = $base_product->get_gallery_image_ids();
+        if (!empty($gallery_image_ids)) {
+            $new_product->set_gallery_image_ids($gallery_image_ids);
+        }
+        
         // Format meta data in human readable format
         $meta_data = $item->get_meta_data();
         $formatted_meta = '';
@@ -864,8 +932,16 @@ class WC_VIP_Products {
         }
         $new_product->set_short_description($formatted_meta);
         
-        $new_product->set_price($base_product->get_price());
-        $new_product->set_regular_price($base_product->get_regular_price());
+        // Set price from the original order line item
+        $item_total = floatval($item->get_total());
+        $item_quantity = $item->get_quantity();
+        $item_price = $item_quantity > 0 ? round($item_total / $item_quantity, 2) : 0;
+        
+        // Add debug logging
+        vip_debug_log(sprintf('Order Item Total: %f, Quantity: %d, Unit Price: %f', $item_total, $item_quantity, $item_price));
+        
+        $new_product->set_regular_price(strval($item_price));
+        $new_product->set_price(strval($item_price));
         
         // Set as VIP product
         $new_product->update_meta_data('_vip_product', 'yes');
@@ -877,6 +953,35 @@ class WC_VIP_Products {
         if (!$new_product_id) {
             wp_send_json_error('Failed to create VIP product');
             return;
+        }
+        
+        // Set the primary category to "VIP Products"
+        $vip_category = get_term_by('name', 'VIP Products', 'product_cat');
+        if (!$vip_category) {
+            // Create the category if it doesn't exist
+            $vip_category = wp_insert_term('VIP Products', 'product_cat');
+            if (is_wp_error($vip_category)) {
+                vip_debug_log('Failed to create VIP Products category: ' . $vip_category->get_error_message());
+            } else {
+                $vip_category = get_term($vip_category['term_id'], 'product_cat');
+            }
+        }
+        
+        if ($vip_category && !is_wp_error($vip_category)) {
+            // Set as primary category
+            wp_set_object_terms($new_product_id, $vip_category->term_id, 'product_cat');
+            update_post_meta($new_product_id, '_yoast_wpseo_primary_product_cat', $vip_category->term_id);
+        }
+        
+        // Copy all product meta data except VIP specific ones
+        $exclude_meta = array('_vip_product', '_vip_user_ids', '_edit_lock', '_edit_last', '_thumbnail_id', '_product_image_gallery');
+        $meta_data = get_post_meta($base_product->get_id());
+        foreach ($meta_data as $meta_key => $meta_values) {
+            if (!in_array($meta_key, $exclude_meta)) {
+                foreach ($meta_values as $meta_value) {
+                    update_post_meta($new_product_id, $meta_key, maybe_unserialize($meta_value));
+                }
+            }
         }
         
         // Return success with edit URL

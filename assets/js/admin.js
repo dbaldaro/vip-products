@@ -1,3 +1,5 @@
+console.log('Local admin.js loaded');
+
 // Add error handler for uncaught errors
 window.onerror = function(msg, url, line, col, error) {
     console.error('Uncaught error:', {
@@ -21,7 +23,7 @@ jQuery(document).ready(function($) {
                 return {
                     term: params.term, // search term
                     action: 'search_users',
-                    nonce: vipProducts.nonce
+                    search_nonce: vipProducts.search_nonce
                 };
             },
             processResults: function(response) {
@@ -98,17 +100,17 @@ jQuery(document).ready(function($) {
         const userId = button.data('user-id');
         
         if (!orderId || !itemId || !productId || !userId) {
-            alert('Error: Missing required data for VIP product creation');
+            alert(vipProducts.i18n.create_error);
             return;
         }
         
-        if (!window.vipProducts || !window.vipProducts.ajax_url || !window.vipProducts.nonce) {
-            alert('Error: VIP Products configuration is missing');
+        if (!window.vipProducts || !window.vipProducts.ajax_url || !window.vipProducts.create_nonce) {
+            alert(vipProducts.i18n.config_error);
             return;
         }
         
         // Disable button and show loading state
-        button.prop('disabled', true).text('Creating...');
+        button.prop('disabled', true).text(vipProducts.i18n.creating);
         
         // Make AJAX request
         $.ajax({
@@ -116,7 +118,7 @@ jQuery(document).ready(function($) {
             type: 'POST',
             data: {
                 action: 'create_vip_from_order_item',
-                nonce: vipProducts.nonce,
+                create_nonce: vipProducts.create_nonce,
                 order_id: orderId,
                 item_id: itemId,
                 product_id: productId,
@@ -124,18 +126,18 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    alert('VIP product created successfully!');
+                    alert(vipProducts.i18n.success);
                     if (response.data && response.data.redirect) {
                         window.location.href = response.data.redirect;
                     }
                 } else {
-                    alert('Failed to create VIP product: ' + (response.data || 'Unknown error'));
-                    button.prop('disabled', false).text('Create VIP Product');
+                    alert('Failed to create VIP product: ' + (response.data || vipProducts.i18n.unknown_error));
+                    button.prop('disabled', false).text(vipProducts.i18n.create_button);
                 }
             },
             error: function(jqXHR, textStatus, errorThrown) {
-                alert('Failed to create VIP product. Please try again.');
-                button.prop('disabled', false).text('Create VIP Product');
+                alert(vipProducts.i18n.ajax_error);
+                button.prop('disabled', false).text(vipProducts.i18n.create_button);
             }
         });
     });
