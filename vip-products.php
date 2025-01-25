@@ -843,11 +843,21 @@ class WC_VIP_Products {
         $new_product = new WC_Product_Simple();
         
         // Set the product data
-        $new_product->set_name(sprintf('%s_%s', $user->user_login, $item->get_name()));
+        $new_product->set_name(sprintf('%s (%s)', $item->get_name(), $user->first_name . ' ' . $user->last_name));   
         $new_product->set_status('publish');
         $new_product->set_catalog_visibility('hidden');
         $new_product->set_description($base_product->get_description());
-        $new_product->set_short_description($item->get_meta_data() ? wp_json_encode($item->get_meta_data()) : '');
+        
+        // Format meta data in human readable format
+        $meta_data = $item->get_meta_data();
+        $formatted_meta = '';
+        if ($meta_data) {
+            foreach ($meta_data as $meta) {
+                $formatted_meta .= sprintf("<strong>%s</strong>: %s\n", wp_strip_all_tags($meta->key), wp_strip_all_tags($meta->value));
+            }
+        }
+        $new_product->set_short_description($formatted_meta);
+        
         $new_product->set_price($base_product->get_price());
         $new_product->set_regular_price($base_product->get_regular_price());
         
