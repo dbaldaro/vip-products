@@ -599,66 +599,23 @@ class WC_VIP_Products {
     }
 
     public function filter_flatsome_search($args) {
-        $current_user_id = get_current_user_id();
-        
         if (!isset($args['meta_query'])) {
             $args['meta_query'] = array();
         }
         
-        if ($current_user_id === 0) {
-            $args['meta_query'][] = array(
-                'relation' => 'OR',
-                array(
-                    'key'     => '_vip_product',
-                    'value'   => 'no',
-                    'compare' => '='
-                ),
-                array(
-                    'key'     => '_vip_product',
-                    'compare' => 'NOT EXISTS'
-                )
-            );
-        } else {
-            // Create the possible serialized formats
-            $single_user = serialize(array($current_user_id)); // a:1:{i:0;i:1;}
-            $user_at_start = sprintf('a:%%{i:0;i:%d;%%', $current_user_id); // a:2:{i:0;i:1;...}
-            $user_anywhere = sprintf('i:%d;', $current_user_id); // matches i:1; anywhere in string
-
-            $args['meta_query'][] = array(
-                'relation' => 'OR',
-                array(
-                    'key'     => '_vip_product',
-                    'value'   => 'yes',
-                    'compare' => '!='
-                ),
-                array(
-                    'relation' => 'AND',
-                    array(
-                        'key'     => '_vip_product',
-                        'value'   => 'yes',
-                        'compare' => '='
-                    ),
-                    array(
-                        'relation' => 'OR',
-                        array(
-                            'key'     => '_vip_user_ids',
-                            'value'   => $single_user,
-                            'compare' => '='
-                        ),
-                        array(
-                            'key'     => '_vip_user_ids',
-                            'value'   => $user_at_start,
-                            'compare' => 'LIKE'
-                        ),
-                        array(
-                            'key'     => '_vip_user_ids',
-                            'value'   => $user_anywhere,
-                            'compare' => 'LIKE'
-                        )
-                    )
-                )
-            );
-        }
+        // Exclude all VIP products from search results
+        $args['meta_query'][] = array(
+            'relation' => 'OR',
+            array(
+                'key'     => '_vip_product',
+                'value'   => 'no',
+                'compare' => '='
+            ),
+            array(
+                'key'     => '_vip_product',
+                'compare' => 'NOT EXISTS'
+            )
+        );
         
         return $args;
     }
@@ -793,7 +750,6 @@ class WC_VIP_Products {
             return $query;
         }
 
-        // Get current user ID
         $current_user_id = get_current_user_id();
 
         // If user is not logged in, exclude all VIP products
