@@ -261,12 +261,14 @@ class WC_VIP_Products {
     private function user_has_vip_access($product_id, $user_id) {
         // Get VIP status
         $vip_status = get_post_meta($product_id, '_vip_product', true);
+        
         if ($vip_status !== 'yes') {
             return false;
         }
 
         // Get VIP user IDs
         $vip_user_ids = get_post_meta($product_id, '_vip_user_ids', true);
+        
         if (empty($vip_user_ids)) {
             return false;
         }
@@ -860,50 +862,15 @@ class WC_VIP_Products {
         // Create new product as a duplicate
         $new_product = new WC_Product_Simple();
         
-        // Set the product data
-        $new_product->set_name(sprintf('%s (%s)', $item->get_name(), $user->first_name . ' ' . $user->last_name));   
-        $new_product->set_status('publish');
-        $new_product->set_catalog_visibility('hidden');
-        $new_product->set_description($base_product->get_description());
+        // Set initial non-price product data
+        $new_product->set_props(array(
+            'name' => sprintf('%s (%s)', $item->get_name(), $user->first_name . ' ' . $user->last_name),
+            'status' => 'publish',
+            'catalog_visibility' => 'hidden',
+            'description' => $base_product->get_description(),
+        ));
         
-        // Set the product image
-        $image_id = get_post_thumbnail_id($base_product->get_id());
-        if ($image_id) {
-            $new_product->set_image_id($image_id);
-        }
-
-        // Set gallery images
-        $gallery_image_ids = $base_product->get_gallery_image_ids();
-        if (!empty($gallery_image_ids)) {
-            $new_product->set_gallery_image_ids($gallery_image_ids);
-        }
-        
-        // Format meta data in human readable format
-        $meta_data = $item->get_meta_data();
-        $formatted_meta = '';
-        if ($meta_data) {
-            foreach ($meta_data as $meta) {
-                $formatted_meta .= sprintf("<strong>%s</strong>: %s\n", wp_strip_all_tags($meta->key), wp_strip_all_tags($meta->value));
-            }
-        }
-        $new_product->set_short_description($formatted_meta);
-        
-        // Set price from the original order line item
-        $item_total = floatval($item->get_total());
-        $item_quantity = $item->get_quantity();
-        $item_price = $item_quantity > 0 ? round($item_total / $item_quantity, 2) : 0;
-        
-        // Add debug logging
-        vip_debug_log(sprintf('Order Item Total: %f, Quantity: %d, Unit Price: %f', $item_total, $item_quantity, $item_price));
-        
-        $new_product->set_regular_price(strval($item_price));
-        $new_product->set_price(strval($item_price));
-        
-        // Set as VIP product
-        $new_product->update_meta_data('_vip_product', 'yes');
-        $new_product->update_meta_data('_vip_user_ids', array($user_id));
-        
-        // Save the product
+        // Save first to get an ID
         $new_product_id = $new_product->save();
         
         if (!$new_product_id) {
@@ -911,7 +878,47 @@ class WC_VIP_Products {
             return;
         }
         
-        // Set the primary category to "VIP Products"
+        // Copy all product meta data except price and VIP specific ones
+        $exclude_meta = array(
+            '_vip_product', '_vip_user_ids', '_edit_lock', '_edit_last', 
+            '_thumbnail_id', '_product_image_gallery',
+            '_price', '_regular_price', '_sale_price' // Exclude price meta
+        );
+        $meta_data = get_post_meta($base_product->get_id());
+        foreach ($meta_data as $meta_key => $meta_values) {
+            if (!in_array($meta_key, $exclude_meta)) {
+                foreach ($meta_values as $meta_value) {
+                    update_post_meta($new_product_id, $meta_key, maybe_unserialize($meta_value));
+                }
+            }
+        }
+        
+        // Set price from the original order line item
+        $item_total = floatval($item->get_total()) + floatval($item->get_total_tax());
+        $item_quantity = $item->get_quantity();
+        $item_price = $item_quantity > 0 ? round($item_total / $item_quantity, 2) : 0;
+        $formatted_price = wc_format_decimal($item_price, 2);
+        
+        // Now set the price after all other meta is copied
+        remove_all_filters('woocommerce_product_get_price');
+        remove_all_filters('woocommerce_product_get_regular_price');
+        
+        // Set price directly in meta
+        update_post_meta($new_product_id, '_regular_price', $formatted_price);
+        update_post_meta($new_product_id, '_price', $formatted_price);
+        delete_post_meta($new_product_id, '_sale_price');
+        
+        // Get a fresh product object and set price again
+        $product = wc_get_product($new_product_id);
+        $product->set_regular_price($formatted_price);
+        $product->set_price($formatted_price);
+        
+        // Set VIP meta
+        $product->update_meta_data('_vip_product', 'yes');
+        $product->update_meta_data('_vip_user_ids', array($user_id));
+        $product->save();
+        
+        // Set the primary category to "VIP Products" and other meta first
         $vip_category = get_term_by('name', 'VIP Products', 'product_cat');
         if (!$vip_category) {
             // Create the category if it doesn't exist
@@ -924,20 +931,8 @@ class WC_VIP_Products {
         }
         
         if ($vip_category && !is_wp_error($vip_category)) {
-            // Set as primary category
             wp_set_object_terms($new_product_id, $vip_category->term_id, 'product_cat');
             update_post_meta($new_product_id, '_yoast_wpseo_primary_product_cat', $vip_category->term_id);
-        }
-        
-        // Copy all product meta data except VIP specific ones
-        $exclude_meta = array('_vip_product', '_vip_user_ids', '_edit_lock', '_edit_last', '_thumbnail_id', '_product_image_gallery');
-        $meta_data = get_post_meta($base_product->get_id());
-        foreach ($meta_data as $meta_key => $meta_values) {
-            if (!in_array($meta_key, $exclude_meta)) {
-                foreach ($meta_values as $meta_value) {
-                    update_post_meta($new_product_id, $meta_key, maybe_unserialize($meta_value));
-                }
-            }
         }
         
         // Return success with edit URL
