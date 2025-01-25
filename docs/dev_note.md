@@ -11,7 +11,9 @@ VIP products in this plugin use two standardized meta fields:
 
 2. `_vip_user_ids` (array)
    - Value: Serialized array of user IDs
-   - Format: `a:1:{i:0;i:1;}` (example for user ID 1)
+   - Format Examples:
+     - Single user: `a:1:{i:0;i:1;}` (for user ID 1)
+     - Multiple users: `a:2:{i:0;i:1;i:1;i:1027;}` (for user IDs 1 and 1027)
    - Purpose: Stores the list of users who have access to this VIP product
 
 ## Implementation Guidelines
@@ -26,8 +28,13 @@ update_post_meta($post_id, '_vip_user_ids', $user_ids_array);
 
 ### Querying VIP Products
 
-When querying for VIP products, use this meta query structure:
+When querying for VIP products, use this meta query structure to handle all possible serialized array formats:
 ```php
+// Create the possible serialized formats
+$single_user = serialize(array($current_user_id)); // a:1:{i:0;i:1;}
+$user_at_start = sprintf('a:%%{i:0;i:%d;%%', $current_user_id); // a:2:{i:0;i:1;...}
+$user_anywhere = sprintf('i:%d;', $current_user_id); // matches i:1; anywhere in string
+
 $args = array(
     'post_type' => 'product',
     'meta_query' => array(
@@ -38,9 +45,22 @@ $args = array(
             'compare' => '='
         ),
         array(
-            'key' => '_vip_user_ids',
-            'value' => $user_id,
-            'compare' => 'LIKE'
+            'relation' => 'OR',
+            array(
+                'key' => '_vip_user_ids',
+                'value' => $single_user,
+                'compare' => '='
+            ),
+            array(
+                'key' => '_vip_user_ids',
+                'value' => $user_at_start,
+                'compare' => 'LIKE'
+            ),
+            array(
+                'key' => '_vip_user_ids',
+                'value' => $user_anywhere,
+                'compare' => 'LIKE'
+            )
         )
     )
 );
@@ -50,9 +70,32 @@ $args = array(
 
 To check if a user has access to a VIP product:
 ```php
-$vip_status = get_post_meta($product_id, '_vip_product', true);
-$vip_user_ids = get_post_meta($product_id, '_vip_user_ids', true);
-$has_access = $vip_status === 'yes' && in_array($user_id, (array)$vip_user_ids);
+function user_has_vip_access($product_id, $user_id) {
+    // Get VIP status
+    $vip_status = get_post_meta($product_id, '_vip_product', true);
+    if ($vip_status !== 'yes') {
+        return false;
+    }
+
+    // Get VIP user IDs
+    $vip_user_ids = get_post_meta($product_id, '_vip_user_ids', true);
+    if (empty($vip_user_ids)) {
+        return false;
+    }
+
+    // Unserialize if it's a string
+    if (is_string($vip_user_ids)) {
+        $vip_user_ids = maybe_unserialize($vip_user_ids);
+    }
+
+    // Convert to array if it's not already
+    if (!is_array($vip_user_ids)) {
+        $vip_user_ids = array($vip_user_ids);
+    }
+
+    // Check if user is in the allowed list
+    return in_array($user_id, $vip_user_ids);
+}
 ```
 
 ## Legacy Notice
@@ -70,3 +113,8 @@ VIP products are automatically assigned to the VIP category (ID: 538) when marke
 3. When updating existing code, ensure it follows these standards
 4. Use proper sanitization when saving user IDs
 5. Always verify both VIP status AND user access when displaying products
+6. When querying VIP products, always handle all possible serialized array formats:
+   - Single user array: `a:1:{i:0;i:1;}`
+   - Multi-user array starting with target user: `a:2:{i:0;i:1;...}`
+   - User ID anywhere in array: `i:1;`
+7. Always use `maybe_unserialize()` when handling the user IDs array to prevent data corruption
