@@ -107,6 +107,9 @@ class WC_VIP_Products {
             // Add VIP filter button to products page
             add_action('restrict_manage_posts', array($this, 'add_vip_filter_button'));
 
+            // Add VIP Products admin page
+            add_action('admin_menu', array($this, 'add_vip_products_admin_menu'));
+
         } catch (Exception $e) {
             vip_debug_log('ERROR: ' . $e->getMessage());
             vip_debug_log('ERROR Stack Trace: ' . $e->getTraceAsString());
@@ -814,6 +817,31 @@ class WC_VIP_Products {
         $query->set('meta_query', $meta_query);
 
         return $query;
+    }
+
+    /**
+     * Add VIP Products admin menu item
+     */
+    public function add_vip_products_admin_menu() {
+        add_submenu_page(
+            'edit.php?post_type=product',
+            __('VIP Products', 'wc-vip-products'),
+            __('VIP Products', 'wc-vip-products'),
+            'manage_woocommerce',
+            'vip-products-admin',
+            array($this, 'render_vip_products_admin_page')
+        );
+    }
+
+    /**
+     * Render VIP Products admin page
+     */
+    public function render_vip_products_admin_page() {
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die(__('You do not have sufficient permissions to access this page.', 'wc-vip-products'));
+        }
+        
+        include_once plugin_dir_path(__FILE__) . 'templates/admin-vip-products.php';
     }
 
     /**
