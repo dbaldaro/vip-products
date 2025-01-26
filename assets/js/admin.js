@@ -42,18 +42,18 @@ jQuery(document).ready(function($) {
             cache: true
         },
         minimumInputLength: 2,
-        placeholder: vipProducts.i18n.searching,
+        placeholder: 'Searching...',
         allowClear: true,
         width: '400px',
         language: {
             errorLoading: function() {
-                return vipProducts.i18n.error_loading;
+                return 'The results could not be loaded.';
             },
             searching: function() {
-                return vipProducts.i18n.searching;
+                return 'Searching...';
             },
             noResults: function() {
-                return vipProducts.i18n.no_results;
+                return 'No results found';
             }
         }
     });
@@ -100,17 +100,18 @@ jQuery(document).ready(function($) {
         const userId = button.data('user-id');
         
         if (!orderId || !itemId || !productId || !userId) {
-            alert(vipProducts.i18n.create_error);
+            alert('Error: Missing required data for VIP product creation');
             return;
         }
         
         if (!window.vipProducts || !window.vipProducts.ajax_url || !window.vipProducts.create_nonce) {
-            alert(vipProducts.i18n.config_error);
+            alert('Error: VIP Products configuration is missing');
             return;
         }
         
         // Disable button and show loading state
-        button.prop('disabled', true).text(vipProducts.i18n.creating);
+        const originalText = button.text();
+        button.prop('disabled', true).text('Creating...');
         
         // Make AJAX request
         $.ajax({
@@ -126,18 +127,18 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    alert(vipProducts.i18n.success);
+                    alert('VIP product created successfully!');
                     if (response.data && response.data.redirect) {
                         window.location.href = response.data.redirect;
                     }
                 } else {
-                    alert('Failed to create VIP product: ' + (response.data || vipProducts.i18n.unknown_error));
-                    button.prop('disabled', false).text(vipProducts.i18n.create_button);
+                    alert('Failed to create VIP product: ' + (response.data || 'Unknown error'));
+                    button.prop('disabled', false).text(originalText);
                 }
             },
             error: function(jqXHR, textStatus, errorThrown) {
-                alert(vipProducts.i18n.ajax_error);
-                button.prop('disabled', false).text(vipProducts.i18n.create_button);
+                alert('Failed to create VIP product. Please try again.');
+                button.prop('disabled', false).text(originalText);
             }
         });
     });

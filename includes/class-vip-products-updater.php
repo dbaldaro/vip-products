@@ -15,6 +15,11 @@ class WC_VIP_Products_Updater {
         $this->plugin_path = plugin_dir_path(dirname(__FILE__));
         $this->current_version = $this->get_plugin_version();
         
+        // Register hooks on init to prevent early loading
+        add_action('init', array($this, 'register_hooks'));
+    }
+
+    public function register_hooks() {
         // Add update checker to WordPress admin
         add_filter('pre_set_site_transient_update_plugins', array($this, 'check_for_update'));
         

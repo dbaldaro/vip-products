@@ -12,7 +12,7 @@ if (!in_array($per_page, $per_page_options)) {
 }
 
 ?><div class="wrap">
-    <h1><?php echo esc_html__('VIP Products Admin', 'wc-vip-products'); ?></h1>
+    <h1>VIP Products Admin</h1>
     
     <div class="tablenav top">
         <div class="alignleft actions">
@@ -22,11 +22,11 @@ if (!in_array($per_page, $per_page_options)) {
                 <select name="per_page">
                     <?php foreach ($per_page_options as $option) : ?>
                         <option value="<?php echo esc_attr($option); ?>" <?php selected($per_page, $option); ?>>
-                            <?php echo sprintf(esc_html__('%d per page', 'wc-vip-products'), $option); ?>
+                            <?php echo sprintf('%d per page', $option); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <input type="submit" class="button" value="<?php esc_attr_e('Apply', 'wc-vip-products'); ?>">
+                <input type="submit" class="button" value="Apply">
             </form>
         </div>
     </div>
@@ -35,11 +35,11 @@ if (!in_array($per_page, $per_page_options)) {
         <table class="wp-list-table widefat fixed striped">
             <thead>
                 <tr>
-                    <th scope="col"><?php echo esc_html__('Product Name', 'wc-vip-products'); ?></th>
-                    <th scope="col"><?php echo esc_html__('Unit Price', 'wc-vip-products'); ?></th>
-                    <th scope="col"><?php echo esc_html__('Stock Status', 'wc-vip-products'); ?></th>
-                    <th scope="col"><?php echo esc_html__('Assigned To', 'wc-vip-products'); ?></th>
-                    <th scope="col"><?php echo esc_html__('Actions', 'wc-vip-products'); ?></th>
+                    <th scope="col">Product Name</th>
+                    <th scope="col">Unit Price</th>
+                    <th scope="col">Stock Status</th>
+                    <th scope="col">Assigned To</th>
+                    <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -71,20 +71,20 @@ if (!in_array($per_page, $per_page_options)) {
                         
                         if (!empty($vip_user_ids)) {
                             if (count($vip_user_ids) > 1) {
-                                $assigned_to = esc_html__('Multiple', 'wc-vip-products');
+                                $assigned_to = 'Multiple';
                                 $sort_key = 'zzz_multiple';
                             } else {
                                 $user = get_user_by('id', $vip_user_ids[0]);
                                 if ($user) {
-                                    $assigned_to = esc_html($user->display_name);
+                                    $assigned_to = $user->display_name;
                                     $sort_key = strtolower($user->display_name);
                                 } else {
-                                    $assigned_to = esc_html__('Unknown', 'wc-vip-products');
+                                    $assigned_to = 'Unknown';
                                     $sort_key = 'zzz_unknown';
                                 }
                             }
                         } else {
-                            $assigned_to = esc_html__('Unassigned', 'wc-vip-products');
+                            $assigned_to = 'Unassigned';
                         }
 
                         $products_data[] = array(
@@ -96,19 +96,16 @@ if (!in_array($per_page, $per_page_options)) {
                                     <td>%s</td>
                                     <td>%s</td>
                                     <td>
-                                        <a href="%s" class="button">%s</a>
-                                        <a href="%s" class="button delete-product" onclick="return confirm(\'%s\')">%s</a>
+                                        <a href="%s" class="button">Edit</a>
+                                        <a href="%s" class="button delete-product" onclick="return confirm(\'Are you sure you want to delete this product?\')">Delete</a>
                                     </td>
                                 </tr>',
                                 esc_html($product->get_name()),
                                 wp_kses_post(wc_price($product->get_price())),
-                                $product->get_stock_status() === 'instock' ? esc_html__('In Stock', 'wc-vip-products') : esc_html__('Out of Stock', 'wc-vip-products'),
+                                $product->get_stock_status() === 'instock' ? 'In Stock' : 'Out of Stock',
                                 $assigned_to,
                                 esc_url(get_edit_post_link()),
-                                esc_html__('Edit', 'wc-vip-products'),
-                                esc_url(get_delete_post_link()),
-                                esc_js(__('Are you sure you want to delete this product?', 'wc-vip-products')),
-                                esc_html__('Delete', 'wc-vip-products')
+                                esc_url(get_delete_post_link())
                             )
                         );
                     endwhile;
@@ -127,7 +124,7 @@ if (!in_array($per_page, $per_page_options)) {
                 else :
                     ?>
                     <tr>
-                        <td colspan="5"><?php echo esc_html__('No VIP products found.', 'wc-vip-products'); ?></td>
+                        <td colspan="5">No VIP products found.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -144,8 +141,9 @@ if (!in_array($per_page, $per_page_options)) {
         <div class="tablenav-pages">
             <span class="displaying-num">
                 <?php echo sprintf(
-                    _n('%s item', '%s items', $total_products, 'wc-vip-products'),
-                    number_format_i18n($total_products)
+                    '%s item%s',
+                    number_format_i18n($total_products),
+                    $total_products > 1 ? 's' : ''
                 ); ?>
             </span>
             <span class="pagination-links">
@@ -153,8 +151,8 @@ if (!in_array($per_page, $per_page_options)) {
                 echo paginate_links(array(
                     'base' => add_query_arg('paged', '%#%'),
                     'format' => '',
-                    'prev_text' => __('&laquo;'),
-                    'next_text' => __('&raquo;'),
+                    'prev_text' => '&laquo;',
+                    'next_text' => '&raquo;',
                     'total' => $total_pages,
                     'current' => $current_page
                 ));
