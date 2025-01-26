@@ -68,16 +68,31 @@ if (!in_array($per_page, $per_page_options)) {
                         
                         $assigned_to = '';
                         $sort_key = 'zzz_unassigned'; // For sorting - unassigned goes last
+                        $tooltip = '';
                         
                         if (!empty($vip_user_ids)) {
                             if (count($vip_user_ids) > 1) {
-                                $assigned_to = 'Multiple';
+                                $assigned_to_text = 'Multiple Users';
+                                $assigned_to = sprintf(
+                                    '%s %s',
+                                    $assigned_to_text,
+                                    '<span class="dashicons dashicons-info-outline tooltip-icon"></span>'
+                                );
                                 $sort_key = 'zzz_multiple';
+                                $user_names = array();
+                                foreach ($vip_user_ids as $user_id) {
+                                    $user = get_user_by('id', $user_id);
+                                    if ($user) {
+                                        $user_names[] = trim($user->first_name . ' ' . $user->last_name);
+                                    }
+                                }
+                                $tooltip = 'title="' . esc_attr(implode(', ', $user_names)) . '"';
                             } else {
                                 $user = get_user_by('id', $vip_user_ids[0]);
                                 if ($user) {
-                                    $assigned_to = $user->display_name;
-                                    $sort_key = strtolower($user->display_name);
+                                    $full_name = trim($user->first_name . ' ' . $user->last_name);
+                                    $assigned_to = !empty($full_name) ? $full_name : $user->display_name;
+                                    $sort_key = strtolower($assigned_to);
                                 } else {
                                     $assigned_to = 'Unknown';
                                     $sort_key = 'zzz_unknown';
@@ -91,21 +106,25 @@ if (!in_array($per_page, $per_page_options)) {
                             'sort_key' => $sort_key,
                             'html' => sprintf(
                                 '<tr>
+                                    <td><a href="%s" style="font-weight: bold;">%s</a></td>
                                     <td>%s</td>
                                     <td>%s</td>
-                                    <td>%s</td>
-                                    <td>%s</td>
+                                    <td %s>%s</td>
                                     <td>
+                                        <a href="%s" class="button">View</a>
                                         <a href="%s" class="button">Edit</a>
                                         <a href="%s" class="button delete-product" onclick="return confirm(\'Are you sure you want to delete this product?\')">Delete</a>
                                     </td>
                                 </tr>',
+                                get_permalink($product->get_id()),
                                 esc_html($product->get_name()),
-                                wp_kses_post(wc_price($product->get_price())),
-                                $product->get_stock_status() === 'instock' ? 'In Stock' : 'Out of Stock',
-                                $assigned_to,
-                                esc_url(get_edit_post_link()),
-                                esc_url(get_delete_post_link())
+                                wc_price($product->get_price()),
+                                $product->get_stock_status(),
+                                $tooltip,
+                                wp_kses($assigned_to, array('span' => array('class' => array()))),
+                                get_permalink($product->get_id()),
+                                esc_url(admin_url('post.php?post=' . $product->get_id() . '&action=edit')),
+                                esc_url(wp_nonce_url(admin_url('admin-post.php?action=delete_vip_product&product_id=' . $product->get_id()), 'delete_vip_product'))
                             )
                         );
                     endwhile;
@@ -184,4 +203,24 @@ if (!in_array($per_page, $per_page_options)) {
 .tablenav.top {
     margin-bottom: 1em;
 }
+.tooltip-icon {
+    font-size: 16px !important;
+    width: 16px !important;
+    height: 16px !important;
+    vertical-align: middle !important;
+    margin-left: 4px !important;
+    color: #666;
+}
+
+.tooltip-icon:hover {
+    color: #000;
+}
 </style>
+
+<?php
+// Add Dashicons to admin page
+add_action('admin_enqueue_scripts', function($hook) {
+    if('toplevel_page_vip-products-admin' === $hook) {
+        wp_enqueue_style('dashicons');
+    }
+});
