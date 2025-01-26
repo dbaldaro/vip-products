@@ -59,6 +59,7 @@ class WC_VIP_Products {
         add_action('wp_ajax_create_vip_from_order_item', array($this, 'create_vip_from_order_item'));
         add_action('wp_ajax_search_products', array($this, 'ajax_search_products'));
         add_action('wp_ajax_create_vip_product_from_template', array($this, 'ajax_create_vip_product_from_template'));
+        add_action('wp_ajax_delete_vip_product', array($this, 'ajax_delete_vip_product'));
 
         // Enqueue admin scripts
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
@@ -986,6 +987,7 @@ class WC_VIP_Products {
         // Set VIP meta
         $product->update_meta_data('_product_visibility_type', 'vip');
         $product->update_meta_data('_vip_user_ids', array($user_id));
+        $product->update_meta_data('_vip_status', 'VIP Members Only'); // Set VIP status to VIP Members Only
         $product->save();
         
         // Set the primary category to "VIP Products" and other meta first
@@ -1109,6 +1111,39 @@ class WC_VIP_Products {
             'message' => 'VIP product created successfully',
             'redirect_url' => $edit_link
         ));
+    }
+
+    /**
+     * AJAX handler for deleting VIP products
+     */
+    public function ajax_delete_vip_product() {
+        // Verify nonce
+        if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'delete_vip_product')) {
+            wp_send_json_error('Invalid security token');
+        }
+
+        // Check if product ID is provided
+        if (!isset($_POST['product_id'])) {
+            wp_send_json_error('Product ID is required');
+        }
+
+        $product_id = intval($_POST['product_id']);
+
+        // Check if user has permission
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error('You do not have permission to delete products');
+        }
+
+        // Delete the product
+        $result = wp_delete_post($product_id, true);
+
+        if ($result) {
+            wp_send_json_success(array(
+                'message' => 'Product deleted successfully'
+            ));
+        } else {
+            wp_send_json_error('Failed to delete product');
+        }
     }
 }
 

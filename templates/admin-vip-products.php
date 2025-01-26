@@ -127,7 +127,7 @@ wp_enqueue_style('wp-jquery-ui-dialog');
                                     <td>
                                         <a href="%s" class="button">View</a>
                                         <a href="%s" class="button">Edit</a>
-                                        <a href="%s" class="button delete-product" onclick="return confirm(\'Are you sure you want to delete this product?\')">Delete</a>
+                                        <a href="#" class="button delete-vip-product" data-product-id="%d" onclick="return confirm(\'Are you sure you want to delete this product?\')">Delete</a>
                                     </td>
                                 </tr>',
                                 get_permalink($product->get_id()),
@@ -138,7 +138,7 @@ wp_enqueue_style('wp-jquery-ui-dialog');
                                 wp_kses($assigned_to, array('span' => array('class' => array()))),
                                 get_permalink($product->get_id()),
                                 esc_url(admin_url('post.php?post=' . $product->get_id() . '&action=edit')),
-                                esc_url(wp_nonce_url(admin_url('admin-post.php?action=delete_vip_product&product_id=' . $product->get_id()), 'delete_vip_product'))
+                                $product->get_id()
                             )
                         );
                     endwhile;
@@ -267,6 +267,45 @@ jQuery(document).ready(function($) {
             error: function() {
                 alert('Error creating VIP product. Please try again.');
                 $('#create-from-template').prop('disabled', false).text('Create VIP Product from Template');
+            }
+        });
+    });
+
+    // Handle delete product
+    $('.delete-vip-product').on('click', function(e) {
+        e.preventDefault();
+        
+        if (!confirm('Are you sure you want to delete this VIP product? This action cannot be undone.')) {
+            return;
+        }
+        
+        var $button = $(this);
+        var productId = $button.data('product-id');
+        
+        $button.prop('disabled', true).text('Deleting...');
+        
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'delete_vip_product',
+                product_id: productId,
+                security: '<?php echo wp_create_nonce("delete_vip_product"); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Remove the row from the table
+                    $button.closest('tr').fadeOut(400, function() {
+                        $(this).remove();
+                    });
+                } else {
+                    alert('Error deleting VIP product: ' + response.data);
+                    $button.prop('disabled', false).text('Delete');
+                }
+            },
+            error: function() {
+                alert('Error deleting VIP product. Please try again.');
+                $button.prop('disabled', false).text('Delete');
             }
         });
     });
