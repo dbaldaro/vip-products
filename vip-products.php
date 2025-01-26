@@ -169,18 +169,20 @@ class WC_VIP_Products {
         echo '<div id="vip_products_data" class="panel woocommerce_options_panel">';
         
         woocommerce_wp_select(array(
-            'id' => '_product_visibility_type',
+            'id' => '_vip_product',
             'label' => 'VIP Status',
             'description' => 'Is this a VIP-only product?',
             'options' => array(
-                'public' => 'No',
-                'vip' => 'VIP Members Only'
-            )
+                'no' => 'No',
+                'yes' => 'Yes'
+            ),
+            'style' => 'width: 150px;'
         ));
 
         echo '<div class="options_group">';
-        echo '<label for="_vip_user_ids">Select VIP Users</label>';
-        echo '<select id="_vip_user_ids" name="_vip_user_ids[]" class="wc-customer-search" multiple="multiple" data-placeholder="Search for users..." style="width: 100%;">';
+        echo '<p class="form-field _vip_user_ids_field">';
+        echo '<label for="_vip_user_ids">VIP Users</label>';
+        echo '<select id="_vip_user_ids" name="_vip_user_ids[]" class="wc-customer-search" multiple="multiple" data-placeholder="Search and select users..." style="width: 100%;">';
 
         // Get saved user IDs
         global $post;
@@ -203,8 +205,8 @@ class WC_VIP_Products {
 
     public function save_vip_products_fields($post_id) {
         // Save VIP status
-        $vip_status = isset($_POST['_product_visibility_type']) ? sanitize_text_field($_POST['_product_visibility_type']) : 'public';
-        update_post_meta($post_id, '_product_visibility_type', $vip_status);
+        $vip_status = isset($_POST['_vip_product']) ? sanitize_text_field($_POST['_vip_product']) : 'no';
+        update_post_meta($post_id, '_vip_product', $vip_status);
         
         // Save VIP users
         $vip_user_ids = isset($_POST['_vip_user_ids']) ? (array)$_POST['_vip_user_ids'] : array();
@@ -212,7 +214,7 @@ class WC_VIP_Products {
         $vip_user_ids = array_filter($vip_user_ids);
         update_post_meta($post_id, '_vip_user_ids', $vip_user_ids);
 
-        if ($vip_status === 'vip') {
+        if ($vip_status === 'yes') {
             // Assign VIP category (538)
             $vip_cat_id = 538;
             wp_set_object_terms($post_id, array($vip_cat_id), 'product_cat', true);
@@ -230,9 +232,9 @@ class WC_VIP_Products {
 
     private function user_has_vip_access($product_id, $user_id) {
         // Get VIP status
-        $vip_status = get_post_meta($product_id, '_product_visibility_type', true);
+        $vip_status = get_post_meta($product_id, '_vip_product', true);
         
-        if ($vip_status !== 'vip') {
+        if ($vip_status !== 'yes') {
             return false;
         }
 
@@ -274,12 +276,12 @@ class WC_VIP_Products {
             $meta_query[] = array(
                 'relation' => 'OR',
                 array(
-                    'key'     => '_product_visibility_type',
-                    'value'   => 'public',
+                    'key'     => '_vip_product',
+                    'value'   => 'no',
                     'compare' => '='
                 ),
                 array(
-                    'key'     => '_product_visibility_type',
+                    'key'     => '_vip_product',
                     'compare' => 'NOT EXISTS'
                 )
             );
@@ -292,15 +294,15 @@ class WC_VIP_Products {
             $meta_query[] = array(
                 'relation' => 'OR',
                 array(
-                    'key'     => '_product_visibility_type',
-                    'value'   => 'public',
+                    'key'     => '_vip_product',
+                    'value'   => 'no',
                     'compare' => '='
                 ),
                 array(
                     'relation' => 'AND',
                     array(
-                        'key'     => '_product_visibility_type',
-                        'value'   => 'vip',
+                        'key'     => '_vip_product',
+                        'value'   => 'yes',
                         'compare' => '='
                     ),
                     array(
@@ -357,8 +359,8 @@ class WC_VIP_Products {
                 'meta_query'     => array(
                     'relation' => 'AND',
                     array(
-                        'key'     => '_product_visibility_type',
-                        'value'   => 'vip',
+                        'key'     => '_vip_product',
+                        'value'   => 'yes',
                         'compare' => '='
                     ),
                     array(
@@ -432,9 +434,9 @@ class WC_VIP_Products {
         
         if (!$product) return;
         
-        $visibility_type = get_post_meta($product->get_id(), '_product_visibility_type', true);
+        $visibility_type = get_post_meta($product->get_id(), '_vip_product', true);
         
-        if ($visibility_type === 'vip') {
+        if ($visibility_type === 'yes') {
             $current_user_id = get_current_user_id();
             $vip_user_ids = get_post_meta($product->get_id(), '_vip_user_ids', true);
             
@@ -460,10 +462,10 @@ class WC_VIP_Products {
         }
         
         $product_id = $post->ID;
-        $visibility_type = get_post_meta($product_id, '_product_visibility_type', true);
+        $visibility_type = get_post_meta($product_id, '_vip_product', true);
 
         // If it's a VIP product
-        if ($visibility_type === 'vip') {
+        if ($visibility_type === 'yes') {
             $current_user_id = get_current_user_id();
             
             // If user is not logged in, redirect
@@ -497,12 +499,12 @@ class WC_VIP_Products {
             $meta_query[] = array(
                 'relation' => 'OR',
                 array(
-                    'key'     => '_product_visibility_type',
-                    'value'   => 'public',
+                    'key'     => '_vip_product',
+                    'value'   => 'no',
                     'compare' => '='
                 ),
                 array(
-                    'key'     => '_product_visibility_type',
+                    'key'     => '_vip_product',
                     'compare' => 'NOT EXISTS'
                 )
             );
@@ -510,15 +512,15 @@ class WC_VIP_Products {
             $meta_query[] = array(
                 'relation' => 'OR',
                 array(
-                    'key'     => '_product_visibility_type',
-                    'value'   => 'vip',
+                    'key'     => '_vip_product',
+                    'value'   => 'yes',
                     'compare' => '!='
                 ),
                 array(
                     'relation' => 'AND',
                     array(
-                        'key'     => '_product_visibility_type',
-                        'value'   => 'vip',
+                        'key'     => '_vip_product',
+                        'value'   => 'yes',
                         'compare' => '='
                     ),
                     array(
@@ -547,8 +549,8 @@ class WC_VIP_Products {
         if ($current_user_id === 0) {
             $where .= " AND {$wpdb->posts}.ID NOT IN (
                 SELECT post_id FROM {$wpdb->postmeta} 
-                WHERE meta_key = '_product_visibility_type' 
-                AND meta_value = 'vip'
+                WHERE meta_key = '_vip_product' 
+                AND meta_value = 'yes'
             )";
         } else {
             // Create the possible serialized formats
@@ -558,8 +560,8 @@ class WC_VIP_Products {
 
             $where .= $wpdb->prepare(" AND ({$wpdb->posts}.ID NOT IN (
                 SELECT post_id FROM {$wpdb->postmeta} 
-                WHERE meta_key = '_product_visibility_type' 
-                AND meta_value = 'vip'
+                WHERE meta_key = '_vip_product' 
+                AND meta_value = 'yes'
             ) OR {$wpdb->posts}.ID IN (
                 SELECT post_id FROM {$wpdb->postmeta} 
                 WHERE meta_key = '_vip_user_ids' 
@@ -579,12 +581,12 @@ class WC_VIP_Products {
         $args['meta_query'][] = array(
             'relation' => 'OR',
             array(
-                'key'     => '_product_visibility_type',
-                'value'   => 'public',
+                'key'     => '_vip_product',
+                'value'   => 'no',
                 'compare' => '='
             ),
             array(
-                'key'     => '_product_visibility_type',
+                'key'     => '_vip_product',
                 'compare' => 'NOT EXISTS'
             )
         );
@@ -600,12 +602,12 @@ class WC_VIP_Products {
         $query['meta_query'][] = array(
             'relation' => 'OR',
             array(
-                'key'     => '_product_visibility_type',
-                'value'   => 'vip',
+                'key'     => '_vip_product',
+                'value'   => 'yes',
                 'compare' => '!='
             ),
             array(
-                'key'     => '_product_visibility_type',
+                'key'     => '_vip_product',
                 'compare' => 'NOT EXISTS'
             )
         );
@@ -630,8 +632,8 @@ class WC_VIP_Products {
         // Add meta query to show only VIP products
         $meta_query = array(
             array(
-                'key'     => '_product_visibility_type',
-                'value'   => 'vip',
+                'key'     => '_vip_product',
+                'value'   => 'yes',
                 'compare' => '='
             )
         );
@@ -672,7 +674,7 @@ class WC_VIP_Products {
         global $post;
         
         if ($post) {
-            $current_product_type = get_post_meta($post->ID, '_product_visibility_type', true);
+            $current_product_type = get_post_meta($post->ID, '_vip_product', true);
             $output = str_replace('</select>', '<option value="vip"' . selected($current_product_type, 'vip', false) . '>VIP Products</option></select>', $output);
         }
         
@@ -720,12 +722,12 @@ class WC_VIP_Products {
             $meta_query = array(
                 'relation' => 'OR',
                 array(
-                    'key'     => '_product_visibility_type',
-                    'value'   => 'vip',
+                    'key'     => '_vip_product',
+                    'value'   => 'yes',
                     'compare' => '!='
                 ),
                 array(
-                    'key'     => '_product_visibility_type',
+                    'key'     => '_vip_product',
                     'compare' => 'NOT EXISTS'
                 )
             );
@@ -737,12 +739,12 @@ class WC_VIP_Products {
                 array(
                     'relation' => 'OR',
                     array(
-                        'key'     => '_product_visibility_type',
-                        'value'   => 'vip',
+                        'key'     => '_vip_product',
+                        'value'   => 'yes',
                         'compare' => '!='
                     ),
                     array(
-                        'key'     => '_product_visibility_type',
+                        'key'     => '_vip_product',
                         'compare' => 'NOT EXISTS'
                     )
                 ),
@@ -750,8 +752,8 @@ class WC_VIP_Products {
                 array(
                     'relation' => 'AND',
                     array(
-                        'key'     => '_product_visibility_type',
-                        'value'   => 'vip',
+                        'key'     => '_vip_product',
+                        'value'   => 'yes',
                         'compare' => '='
                     ),
                     array(
@@ -941,7 +943,7 @@ class WC_VIP_Products {
         
         // Copy all product meta data except price and VIP specific ones
         $exclude_meta = array(
-            '_product_visibility_type', '_vip_user_ids', '_edit_lock', '_edit_last',
+            '_vip_product', '_vip_user_ids', '_edit_lock', '_edit_last',
             '_price', '_regular_price', '_sale_price' // Exclude price meta only
         );
         $meta_data = get_post_meta($base_product->get_id());
@@ -985,7 +987,7 @@ class WC_VIP_Products {
         $product->set_price($formatted_price);
         
         // Set VIP meta
-        $product->update_meta_data('_product_visibility_type', 'vip');
+        $product->update_meta_data('_vip_product', 'yes');
         $product->update_meta_data('_vip_user_ids', array($user_id));
         $product->update_meta_data('_vip_status', 'VIP Members Only'); // Set VIP status to VIP Members Only
         $product->save();

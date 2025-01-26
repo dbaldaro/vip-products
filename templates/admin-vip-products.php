@@ -87,20 +87,22 @@ wp_enqueue_style('wp-jquery-ui-dialog');
                         if (!empty($vip_user_ids)) {
                             if (count($vip_user_ids) > 1) {
                                 $assigned_to_text = 'Multiple Users';
-                                $assigned_to = sprintf(
-                                    '%s %s',
-                                    $assigned_to_text,
-                                    '<span class="dashicons dashicons-info-outline tooltip-icon"></span>'
-                                );
-                                $sort_key = 'zzz_multiple';
                                 $user_names = array();
                                 foreach ($vip_user_ids as $user_id) {
                                     $user = get_user_by('id', $user_id);
                                     if ($user) {
-                                        $user_names[] = trim($user->first_name . ' ' . $user->last_name);
+                                        $name = trim($user->first_name . ' ' . $user->last_name);
+                                        $name = !empty($name) ? $name : $user->display_name;
+                                        $user_names[] = esc_html($name);
                                     }
                                 }
                                 $tooltip = 'title="' . esc_attr(implode(', ', $user_names)) . '"';
+                                $assigned_to = sprintf(
+                                    '%s <span class="dashicons dashicons-info-outline" %s></span>',
+                                    esc_html($assigned_to_text),
+                                    $tooltip
+                                );
+                                $sort_key = 'zzz_multiple';
                             } else {
                                 $user = get_user_by('id', $vip_user_ids[0]);
                                 if ($user) {
@@ -123,7 +125,7 @@ wp_enqueue_style('wp-jquery-ui-dialog');
                                     <td><a href="%s" style="font-weight: bold;">%s</a></td>
                                     <td>%s</td>
                                     <td>%s</td>
-                                    <td %s>%s</td>
+                                    <td>%s</td>
                                     <td>
                                         <a href="%s" class="button">View</a>
                                         <a href="%s" class="button">Edit</a>
@@ -134,8 +136,7 @@ wp_enqueue_style('wp-jquery-ui-dialog');
                                 esc_html($product->get_name()),
                                 wc_price($product->get_price()),
                                 $product->get_stock_status(),
-                                $tooltip,
-                                wp_kses($assigned_to, array('span' => array('class' => array()))),
+                                $assigned_to,
                                 get_permalink($product->get_id()),
                                 esc_url(admin_url('post.php?post=' . $product->get_id() . '&action=edit')),
                                 $product->get_id()

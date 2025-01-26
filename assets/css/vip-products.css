@@ -204,4 +204,45 @@ th.sortable.sorted::after {
     margin-bottom: 10px;
     color: #666;
     font-size: 0.9em;
-} 
+}
+
+/* VIP Product Fields */
+#vip_products_data .form-field {
+    padding: 15px 10px !important;
+    margin: 0;
+}
+
+#vip_products_data label {
+    float: left;
+    width: 150px;
+    padding: 0;
+    margin: 0;
+    font-weight: 600;
+}
+
+#vip_products_data select#_product_visibility_type {
+    margin-left: 0;
+}
+
+#vip_products_data ._vip_user_ids_field {
+    padding-top: 20px !important;
+}
+
+#vip_products_data .select2-container {
+    margin-left: 150px;
+    width: calc(100% - 150px) !important;
+}
+
+#vip_products_data .description {
+    margin: 0 0 0 150px;
+    padding: 0;
+    clear: none;
+}
+
+/* VIP Products table styles */
+.dashicons-info-outline {
+    color: #2271b1;
+    cursor: help;
+    vertical-align: middle;
+    margin-left: 5px;
+}
