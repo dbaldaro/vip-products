@@ -40,14 +40,33 @@ class WC_VIP_Products_Updater {
             return $transient;
         }
 
+        // Get remote version
         $remote_version = $this->get_remote_version();
+        
+        // Get plugin basename
+        $plugin_basename = plugin_basename($this->plugin_path . 'vip-products.php');
+        
         if ($remote_version && version_compare($this->current_version, $remote_version, '<')) {
             $obj = new stdClass();
             $obj->slug = $this->plugin_slug;
+            $obj->plugin = $plugin_basename;
             $obj->new_version = $remote_version;
             $obj->url = "https://github.com/{$this->github_repo}";
             $obj->package = $this->get_download_url($remote_version);
-            $transient->response[$this->plugin_slug . '/' . $this->plugin_slug . '.php'] = $obj;
+            
+            // Add to WordPress transient
+            $transient->response[$plugin_basename] = $obj;
+        } else {
+            // No update available
+            $obj = new stdClass();
+            $obj->slug = $this->plugin_slug;
+            $obj->plugin = $plugin_basename;
+            $obj->new_version = $this->current_version;
+            $obj->url = "https://github.com/{$this->github_repo}";
+            $obj->package = '';
+            
+            // Add to no_update list
+            $transient->no_update[$plugin_basename] = $obj;
         }
 
         return $transient;
