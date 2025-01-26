@@ -57,6 +57,8 @@ class WC_VIP_Products {
         // Add AJAX handlers
         add_action('wp_ajax_search_users', array($this, 'ajax_search_users'));
         add_action('wp_ajax_create_vip_from_order_item', array($this, 'create_vip_from_order_item'));
+        add_action('wp_ajax_search_products', array($this, 'ajax_search_products'));
+        add_action('wp_ajax_create_vip_product_from_template', array($this, 'ajax_create_vip_product_from_template'));
 
         // Enqueue admin scripts
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
@@ -1007,6 +1009,105 @@ class WC_VIP_Products {
         wp_send_json_success(array(
             'message' => 'VIP product created successfully',
             'redirect' => get_edit_post_link($new_product_id, 'url')
+        ));
+    }
+
+    /**
+     * AJAX handler for searching products
+     */
+    public function ajax_search_products() {
+        check_ajax_referer('search-products', 'security');
+
+        $term = sanitize_text_field($_GET['term']);
+        
+        $args = array(
+            'post_type' => 'product',
+            'post_status' => 'publish',
+            'posts_per_page' => 10,
+            's' => $term
+        );
+
+        $products = get_posts($args);
+        $results = array();
+
+        foreach ($products as $product) {
+            $results[] = array(
+                'id' => $product->ID,
+                'label' => $product->post_title,
+                'value' => $product->post_title
+            );
+        }
+
+        wp_send_json($results);
+    }
+
+    /**
+     * AJAX handler for creating a VIP product from template
+     */
+    public function ajax_create_vip_product_from_template() {
+        check_ajax_referer('create-vip-product', 'security');
+
+        $template_id = intval($_POST['product_id']);
+        if (!$template_id) {
+            wp_send_json_error('Invalid product ID');
+            return;
+        }
+
+        $template_product = wc_get_product($template_id);
+        if (!$template_product) {
+            wp_send_json_error('Template product not found');
+            return;
+        }
+
+        // Create a new product as a duplicate of the template
+        $new_product = new WC_Product();
+        
+        // Set initial non-price product data
+        $new_product->set_name($template_product->get_name() . ' (VIP)');
+        $new_product->set_status('publish');
+        $new_product->set_catalog_visibility('hidden');
+        $new_product->set_description($template_product->get_description());
+        $new_product->set_short_description($template_product->get_short_description());
+        $new_product->set_regular_price($template_product->get_regular_price());
+        $new_product->set_sale_price($template_product->get_sale_price());
+        $new_product->set_tax_status($template_product->get_tax_status());
+        $new_product->set_tax_class($template_product->get_tax_class());
+        $new_product->set_manage_stock($template_product->get_manage_stock());
+        $new_product->set_stock_quantity($template_product->get_stock_quantity());
+        $new_product->set_stock_status($template_product->get_stock_status());
+        $new_product->set_backorders($template_product->get_backorders());
+        $new_product->set_reviews_allowed($template_product->get_reviews_allowed());
+        $new_product->set_sold_individually($template_product->get_sold_individually());
+        $new_product->set_weight($template_product->get_weight());
+        $new_product->set_length($template_product->get_length());
+        $new_product->set_width($template_product->get_width());
+        $new_product->set_height($template_product->get_height());
+
+        // Save the new product
+        $new_product_id = $new_product->save();
+
+        // Copy product images
+        $template_image_id = $template_product->get_image_id();
+        if ($template_image_id) {
+            set_post_thumbnail($new_product_id, $template_image_id);
+        }
+
+        $template_gallery_ids = $template_product->get_gallery_image_ids();
+        if (!empty($template_gallery_ids)) {
+            update_post_meta($new_product_id, '_product_image_gallery', implode(',', $template_gallery_ids));
+        }
+
+        // Set VIP product meta according to dev note guidelines
+        update_post_meta($new_product_id, '_vip_product', 'yes');
+        update_post_meta($new_product_id, '_vip_user_ids', array()); // Empty array initially, users can be assigned later
+
+        // Get the edit link for the new product
+        $edit_link = get_edit_post_link($new_product_id, 'raw'); // 'raw' returns the URL without entities
+
+        wp_send_json_success(array(
+            'product_id' => $new_product_id,
+            'message' => 'VIP product created successfully',
+            'redirect_url' => $edit_link
         ));
     }
 }

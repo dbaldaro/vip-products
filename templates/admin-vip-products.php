@@ -11,9 +11,23 @@ if (!in_array($per_page, $per_page_options)) {
     $per_page = 25;
 }
 
+// Enqueue necessary scripts
+wp_enqueue_script('jquery-ui-autocomplete');
+wp_enqueue_style('wp-jquery-ui-dialog');
+
 ?><div class="wrap">
     <h1>VIP Products Admin</h1>
-    
+
+    <!-- Template Product Selection -->
+    <div class="template-product-selection">
+        <h3>Create VIP Product from Template</h3>
+        <div class="template-product-form">
+            <input type="text" id="template-product-search" placeholder="Search for a product to use as template..." style="width: 300px;">
+            <input type="hidden" id="template-product-id">
+            <button type="button" id="create-from-template" class="button button-primary" disabled>Create VIP Product from Template</button>
+        </div>
+    </div>
+
     <div class="tablenav top">
         <div class="alignleft actions">
             <form method="get">
@@ -200,6 +214,65 @@ if (!in_array($per_page, $per_page_options)) {
     </div>
 </div>
 
+<script type="text/javascript">
+jQuery(document).ready(function($) {
+    $('#template-product-search').autocomplete({
+        source: function(request, response) {
+            $.ajax({
+                url: ajaxurl,
+                dataType: 'json',
+                data: {
+                    action: 'search_products',
+                    term: request.term,
+                    security: '<?php echo wp_create_nonce("search-products"); ?>'
+                },
+                success: function(data) {
+                    response(data);
+                }
+            });
+        },
+        minLength: 2,
+        select: function(event, ui) {
+            $('#template-product-id').val(ui.item.id);
+            $('#create-from-template').prop('disabled', false);
+        }
+    });
+
+    $('#create-from-template').on('click', function() {
+        var productId = $('#template-product-id').val();
+        if (!productId) return;
+
+        $(this).prop('disabled', true).text('Creating...');
+
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'create_vip_product_from_template',
+                product_id: productId,
+                security: '<?php echo wp_create_nonce("create-vip-product"); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    if (response.data.redirect_url) {
+                        window.location.href = response.data.redirect_url;
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    alert('Error creating VIP product: ' + response.data);
+                    $('#create-from-template').prop('disabled', false).text('Create VIP Product from Template');
+                }
+            },
+            error: function() {
+                alert('Error creating VIP product. Please try again.');
+                $('#create-from-template').prop('disabled', false).text('Create VIP Product from Template');
+            }
+        });
+    });
+});
+</script>
+
 <style>
 .vip-products-table-wrapper {
     margin-top: 20px;
@@ -231,6 +304,27 @@ if (!in_array($per_page, $per_page_options)) {
 
 .vip-products-update-status .notice a {
     font-weight: 500;
+}
+
+.template-product-selection {
+    background: #fff;
+    padding: 15px;
+    margin: 20px 0;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.template-product-form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.ui-autocomplete {
+    max-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 9999;
 }
 </style>
 
