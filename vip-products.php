@@ -2,7 +2,7 @@
 /*
 Plugin Name: WooCommerce VIP Products
 Description: Allows for creation of VIP-exclusive products for specific users.
-Version: 1.1.20
+Version: 1.1.22
 Author: David Baldaro
 */
 
