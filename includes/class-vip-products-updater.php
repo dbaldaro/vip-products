@@ -25,15 +25,9 @@ class WC_VIP_Products_Updater {
         
         // Add plugin info to WordPress updates screen
         add_filter('plugins_api', array($this, 'plugin_info'), 20, 3);
-        
-        // Add settings page
-        add_action('admin_menu', array($this, 'add_settings_page'));
-        
-        // Add update notice
-        add_action('admin_notices', array($this, 'update_notice'));
     }
 
-    private function get_plugin_version() {
+    public function get_plugin_version() {
         if (!function_exists('get_plugin_data')) {
             require_once(ABSPATH . 'wp-admin/includes/plugin.php');
         }
@@ -59,7 +53,7 @@ class WC_VIP_Products_Updater {
         return $transient;
     }
 
-    private function get_remote_version() {
+    public function get_remote_version() {
         $response = wp_remote_get($this->github_api_url, array(
             'headers' => array(
                 'Accept' => 'application/vnd.github.v3+json',
@@ -135,17 +129,6 @@ class WC_VIP_Products_Updater {
         return 'No changelog available.';
     }
 
-    public function add_settings_page() {
-        add_submenu_page(
-            'woocommerce',
-            'VIP Products Updates',
-            'VIP Products Updates',
-            'manage_options',
-            'vip-products-updates',
-            array($this, 'settings_page')
-        );
-    }
-
     public function settings_page() {
         $remote_version = $this->get_remote_version();
         ?>
@@ -163,20 +146,5 @@ class WC_VIP_Products_Updater {
             <p>This plugin automatically checks for updates from GitHub. When updates are available, they will appear in your WordPress updates section.</p>
         </div>
         <?php
-    }
-
-    public function update_notice() {
-        $remote_version = $this->get_remote_version();
-        if ($remote_version && version_compare($this->current_version, $remote_version, '<')) {
-            ?>
-            <div class="notice notice-warning is-dismissible">
-                <p><?php printf(
-                    'A new version of WooCommerce VIP Products (v%s) is available! Please visit the <a href="%s">WordPress Updates</a> page to update.',
-                    esc_html($remote_version),
-                    esc_url(admin_url('update-core.php'))
-                ); ?></p>
-            </div>
-            <?php
-        }
     }
 }

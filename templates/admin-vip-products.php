@@ -154,66 +154,83 @@ if (!in_array($per_page, $per_page_options)) {
     $total_products = $vip_products->found_posts;
     $total_pages = ceil($total_products / $per_page);
     
-    if ($total_pages > 1) :
+    if ($total_pages > 1) {
+        echo '<div class="tablenav bottom">';
+        echo paginate_links(array(
+            'base' => add_query_arg('paged', '%#%'),
+            'format' => '',
+            'prev_text' => __('&laquo;'),
+            'next_text' => __('&raquo;'),
+            'total' => $total_pages,
+            'current' => $current_page
+        ));
+        echo '</div>';
+    }
     ?>
-    <div class="tablenav bottom">
-        <div class="tablenav-pages">
-            <span class="displaying-num">
-                <?php echo sprintf(
-                    '%s item%s',
-                    number_format_i18n($total_products),
-                    $total_products > 1 ? 's' : ''
-                ); ?>
-            </span>
-            <span class="pagination-links">
-                <?php
-                echo paginate_links(array(
-                    'base' => add_query_arg('paged', '%#%'),
-                    'format' => '',
-                    'prev_text' => '&laquo;',
-                    'next_text' => '&raquo;',
-                    'total' => $total_pages,
-                    'current' => $current_page
-                ));
+
+    <div class="vip-products-update-status postbox">
+        <h2 class="hndle"><span>Plugin Update Status</span></h2>
+        <div class="inside">
+            <?php
+            // Create a new instance of the updater just for checking status
+            $updater = new WC_VIP_Products_Updater();
+            try {
+                $current_version = $updater->get_plugin_version();
+                $remote_version = $updater->get_remote_version();
                 ?>
-            </span>
+                <div class="notice <?php echo ($remote_version && version_compare($current_version, $remote_version, '<')) ? 'notice-warning' : 'notice-info'; ?> inline">
+                    <p><strong>Current Version:</strong> <?php echo esc_html($current_version); ?></p>
+                    <p><strong>Latest Version:</strong> <?php echo $remote_version ? esc_html($remote_version) : 'Unable to check'; ?></p>
+                    <?php if ($remote_version && version_compare($current_version, $remote_version, '<')): ?>
+                        <p>An update is available! Please visit the <a href="<?php echo esc_url(admin_url('update-core.php')); ?>">WordPress Updates</a> page to update the plugin.</p>
+                    <?php else: ?>
+                        <p>You are running the latest version.</p>
+                    <?php endif; ?>
+                </div>
+                <?php
+            } catch (Exception $e) {
+                ?>
+                <div class="notice notice-error inline">
+                    <p>Unable to check for updates at this time. Please try again later.</p>
+                </div>
+                <?php
+            }
+            ?>
         </div>
     </div>
-    <?php endif; ?>
 </div>
 
 <style>
 .vip-products-table-wrapper {
     margin-top: 20px;
+    margin-bottom: 20px;
 }
-.vip-products-table-wrapper .button {
-    margin-right: 5px;
-}
-.vip-products-table-wrapper .button.delete-product {
-    color: #a00;
-}
-.vip-products-table-wrapper .button.delete-product:hover {
-    color: #dc3232;
-    border-color: #dc3232;
-}
-.tablenav-pages {
-    float: right;
-    margin: 1em 0;
-}
-.tablenav.top {
-    margin-bottom: 1em;
-}
+
 .tooltip-icon {
-    font-size: 16px !important;
-    width: 16px !important;
-    height: 16px !important;
-    vertical-align: middle !important;
-    margin-left: 4px !important;
     color: #666;
+    vertical-align: middle;
+    margin-left: 5px;
 }
 
 .tooltip-icon:hover {
     color: #000;
+}
+
+.vip-products-update-status {
+    margin-top: 20px;
+}
+
+.vip-products-update-status .notice {
+    margin: 0;
+    padding: 12px;
+}
+
+.vip-products-update-status .notice p {
+    margin: 0.5em 0;
+}
+
+.vip-products-update-status .notice a {
+    font-weight: 500;
 }
 </style>
 

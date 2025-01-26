@@ -37,9 +37,8 @@ class WC_VIP_Products {
 
     public function initialize_plugin() {
         try {
-            // Load and initialize the updater after init
+            // Load the updater class but don't initialize it yet
             require_once plugin_dir_path(__FILE__) . 'includes/class-vip-products-updater.php';
-            $this->updater = new WC_VIP_Products_Updater();
 
             // Check if WooCommerce is active
             if (!class_exists('WooCommerce')) {
