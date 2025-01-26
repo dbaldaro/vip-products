@@ -43,30 +43,34 @@ class WC_VIP_Products_Updater {
         // Get remote version
         $remote_version = $this->get_remote_version();
         
-        // Get plugin basename
-        $plugin_basename = plugin_basename($this->plugin_path . 'vip-products.php');
+        // Get plugin basename - this is critical for WordPress to recognize the plugin
+        $plugin_file = 'vip-products/vip-products.php';
         
         if ($remote_version && version_compare($this->current_version, $remote_version, '<')) {
             $obj = new stdClass();
+            $obj->id = $plugin_file;
             $obj->slug = $this->plugin_slug;
-            $obj->plugin = $plugin_basename;
+            $obj->plugin = $plugin_file;
             $obj->new_version = $remote_version;
             $obj->url = "https://github.com/{$this->github_repo}";
             $obj->package = $this->get_download_url($remote_version);
+            $obj->tested = '6.4'; // Add WordPress compatibility info
             
             // Add to WordPress transient
-            $transient->response[$plugin_basename] = $obj;
+            $transient->response[$plugin_file] = $obj;
         } else {
-            // No update available
+            // No update available - still register the plugin
             $obj = new stdClass();
+            $obj->id = $plugin_file;
             $obj->slug = $this->plugin_slug;
-            $obj->plugin = $plugin_basename;
+            $obj->plugin = $plugin_file;
             $obj->new_version = $this->current_version;
             $obj->url = "https://github.com/{$this->github_repo}";
             $obj->package = '';
+            $obj->tested = '6.4';
             
             // Add to no_update list
-            $transient->no_update[$plugin_basename] = $obj;
+            $transient->no_update[$plugin_file] = $obj;
         }
 
         return $transient;
@@ -124,28 +128,20 @@ class WC_VIP_Products_Updater {
                 $plugin_info->author = 'David Baldaro';
                 $plugin_info->homepage = "https://github.com/{$this->github_repo}";
                 $plugin_info->requires = '5.0';
-                $plugin_info->tested = get_bloginfo('version');
+                $plugin_info->tested = '6.4';
                 $plugin_info->downloaded = 0;
                 $plugin_info->last_updated = $data->published_at;
                 $plugin_info->sections = array(
                     'description' => $data->body,
-                    'changelog' => $this->get_changelog()
+                    'changelog' => $data->body
                 );
                 $plugin_info->download_link = $this->get_download_url($plugin_info->version);
-
+                
                 return $plugin_info;
             }
         }
 
         return $result;
-    }
-
-    private function get_changelog() {
-        $response = wp_remote_get("https://raw.githubusercontent.com/{$this->github_repo}/master/CHANGELOG.md");
-        if (!is_wp_error($response)) {
-            return wp_remote_retrieve_body($response);
-        }
-        return 'No changelog available.';
     }
 
     public function settings_page() {

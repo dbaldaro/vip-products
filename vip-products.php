@@ -2,7 +2,7 @@
 /*
 Plugin Name: WooCommerce VIP Products
 Description: Allows for creation of VIP-exclusive products for specific users.
-Version: 1.1.21
+Version: 1.1.20
 Author: David Baldaro
 */
 
@@ -33,14 +33,14 @@ class WC_VIP_Products {
     public function __construct() {
         // Register initialization hook
         add_action('init', array($this, 'initialize_plugin'));
+        
+        // Initialize updater early
+        require_once plugin_dir_path(__FILE__) . 'includes/class-vip-products-updater.php';
+        $this->updater = new WC_VIP_Products_Updater();
     }
 
     public function initialize_plugin() {
         try {
-            // Load and initialize the updater class
-            require_once plugin_dir_path(__FILE__) . 'includes/class-vip-products-updater.php';
-            $this->updater = new WC_VIP_Products_Updater();
-
             // Check if WooCommerce is active
             if (!class_exists('WooCommerce')) {
                 add_action('admin_notices', array($this, 'woocommerce_missing_notice'));
